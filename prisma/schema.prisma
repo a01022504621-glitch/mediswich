@@ -1,0 +1,423 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * ===== Enums =====
+ */
+enum Role {
+  MASTER_ADMIN
+  HOSPITAL_OWNER
+  HOSPITAL_STAFF
+}
+
+enum PackageCategory {
+  NHIS
+  GENERAL
+  CORP
+}
+
+enum BookingStatus {
+  PENDING
+  RESERVED
+  CONFIRMED
+  COMPLETED
+  CANCELED
+  NO_SHOW
+}
+
+enum Sex {
+  M
+  F
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum InvoiceStatus {
+  OPEN
+  PAID
+  VOID
+}
+
+/**
+ * ===== Core Models =====
+ */
+model Hospital {
+  id         String           @id @default(cuid())
+  slug       String           @unique
+  name       String
+  logoUrl    String?
+  themeJson  String?          @db.Text
+  noticeHtml String?          @db.Text
+  domain     String?
+  domains    HospitalDomain[]
+
+  users      User[]
+  clients    Client[]
+  companies  Company[]
+  packages   Package[]
+  slots      SlotTemplate[]
+  exceptions SlotException[]
+  bookings   Booking[]
+  auditLogs  AuditLog[]
+
+  // Billing
+  subscriptions HospitalSubscription[]
+  invoices      Invoice[]
+
+  // 추가검사 마스터
+  addonItems AddonItem[]
+
+  // Capacity
+  capacityDefaults  CapacityDefault?
+  capacityOverrides CapacityOverride[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([slug])
+}
+
+model HospitalDomain {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  host       String    @unique // ex) narahospital.mediswich.co.kr
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([hospitalId])
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String
+  password           String
+  role               Role
+  hospitalId         String?
+  hospital           Hospital?  @relation(fields: [hospitalId], references: [id])
+  sessions           Session[]
+  auditLogs          AuditLog[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @default(now()) @updatedAt
+  mustChangePassword Boolean    @default(false)
+
+  @@unique([hospitalId, email])
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  jwt       String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+/**
+ * (기존) 별도 용도
+ */
+model Company {
+  id         String   @id @default(cuid())
+  name       String
+  token      String   @unique
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  bookings Booking[]
+
+  @@index([hospitalId])
+}
+
+/**
+ * ===== Packages =====
+ */
+model Package {
+  id String @id @default(cuid())
+
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  // 특정 고객사 전용 패키지(기업 검진)
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  title    String
+  summary  String?         @db.Text
+  price    Int?
+  tags     Json?
+  visible  Boolean         @default(true)
+  category PackageCategory @default(GENERAL)
+
+  // ── 검진기간(선택)
+  startDate DateTime?
+  endDate   DateTime?
+
+  // 예약/관리자 카드 표기 메타
+  baseCount   Int?
+  selectCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  bookings Booking[]
+
+  @@index([hospitalId, category, visible, clientId])
+  @@index([hospitalId, visible, startDate, endDate])
+}
+
+/**
+ * ===== Capacity =====
+ */
+model SlotTemplate {
+  id       String @id @default(cuid())
+  dow      Int
+  start    String
+  end      String
+  capacity Int
+
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId, dow])
+}
+
+model SlotException {
+  id     String   @id @default(cuid())
+  date   DateTime
+  reason String?
+
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@unique([hospitalId, date], name: "hospitalId_date")
+  @@index([hospitalId, date])
+}
+
+/**
+ * 일자·리소스별 마감/한시적 케파 재정의
+ */
+model CapacityOverride {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  date     DateTime
+  type     String // "EGD" | "COL" 등
+  isClosed Boolean  @default(true)
+  planned  Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([hospitalId, date, type], name: "hospitalId_date_type")
+  @@index([hospitalId, date])
+}
+
+/**
+ * 병원 기본 케파(없으면 템플릿 합계 fallback)
+ */
+model CapacityDefault {
+  id         String   @id @default(cuid())
+  hospitalId String   @unique
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  basicCap   Int?
+  nhisCap    Int?
+  specialCap Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+/**
+ * ===== Bookings =====
+ */
+model Booking {
+  id String @id @default(cuid())
+
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id])
+
+  date DateTime
+  time String
+
+  name            String
+  phone           String
+  phoneNormalized String?
+  patientBirth    String?
+  sex             Sex?
+
+  code   String        @default(cuid())
+  status BookingStatus @default(RESERVED)
+  meta   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([hospitalId, code])
+  @@index([hospitalId, date])
+  @@index([hospitalId, phoneNormalized])
+  @@index([hospitalId, date, time])
+}
+
+/**
+ * ===== Audit =====
+ */
+model AuditLog {
+  id         String    @id @default(cuid())
+  hospitalId String?
+  userId     String?
+  action     String
+  meta       Json?
+  createdAt  DateTime  @default(now())
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id])
+
+  @@index([hospitalId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+/**
+ * ===== Client =====
+ */
+model Client {
+  id String @id @default(cuid())
+
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  name      String
+  contact   String?
+  startDate DateTime?
+  endDate   DateTime?
+  memo      String?
+  code      String?
+  directUrl String?
+
+  participantsCount Int   @default(0)
+  participants      Json?
+
+  packages Package[]
+
+  // 추가검사 클라이언트별 재정의
+  addonItemClients AddonItemClient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([hospitalId, code])
+  @@index([hospitalId, name])
+  @@index([hospitalId, code])
+}
+
+/**
+ * ===== 추가검사(병원 공통 마스터) =====
+ */
+model AddonItem {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  name     String
+  sex      Sex?
+  priceKRW Int     @default(0)
+  isActive Boolean @default(true)
+
+  clientOverrides AddonItemClient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([hospitalId, isActive])
+  @@index([hospitalId, name])
+}
+
+/**
+ * ===== 추가검사 고객사별 재정의 =====
+ */
+model AddonItemClient {
+  id          String    @id @default(cuid())
+  addonItemId String
+  addonItem   AddonItem @relation(fields: [addonItemId], references: [id], onDelete: Cascade)
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  enabled  Boolean @default(true)
+  priceKRW Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([addonItemId, clientId])
+  @@index([clientId])
+}
+
+/**
+ * ===== Plans / Subscription / Invoice =====
+ */
+model Plan {
+  id        String   @id @default(cuid())
+  code      String   @unique // BASIC, PRO, ENTERPRISE
+  name      String
+  priceKRW  Int
+  features  Json
+  createdAt DateTime @default(now())
+
+  subscriptions HospitalSubscription[]
+}
+
+model HospitalSubscription {
+  id               String             @id @default(cuid())
+  hospitalId       String
+  hospital         Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  planId           String
+  plan             Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status           SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime
+  billingType      String             @default("INVOICE") // INVOICE | CARD
+  pgCustomerId     String?
+  createdAt        DateTime           @default(now())
+
+  @@index([hospitalId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  hospitalId  String
+  hospital    Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  periodStart DateTime
+  periodEnd   DateTime
+  amountKRW   Int
+  status      InvoiceStatus @default(OPEN)
+  pgPaymentId String?
+  issuedAt    DateTime      @default(now())
+  paidAt      DateTime?
+
+  @@index([hospitalId, issuedAt])
+}

@@ -1,0 +1,39 @@
+# deps
+node_modules/
+
+# Next.js build
+.next/
+out/
+
+# builds
+dist/
+build/
+
+# IDE
+.vscode/
+*.code-workspace
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Prisma local DBs (사용 시)
+prisma/dev.db
+prisma/dev.sqlite
+*.sqlite
+*.sqlite-journal
+
+# Vercel CLI
+.vercel/

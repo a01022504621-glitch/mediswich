@@ -1,0 +1,6 @@
+{
+  "hospital": { "name": "하이병원", "slug": "hi" },
+  "admin": { "email": "admin@hi.local", "password": "admin1234!", "role": "HOSPITAL_OWNER" },
+  "planCode": "PRO",
+  "seedSlots": true
+}
