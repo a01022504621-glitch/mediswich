@@ -1,11 +1,13 @@
-// /middleware.ts (교체본)
+// /middleware.ts
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export const config = {
+  // API는 제외
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };
 
+const ROOT = "mediswich.co.kr";
 const COOKIE = process.env.COOKIE_NAME || "msw_m";
 
 function isAuthed(req: NextRequest) {
@@ -13,21 +15,40 @@ function isAuthed(req: NextRequest) {
 }
 
 export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const host = req.headers.get("host") || "";
+  const url = req.nextUrl;
+  const origPath = url.pathname;
   const isProd = process.env.NODE_ENV === "production";
-  const isApi = pathname.startsWith("/api/");
 
-  // 공개 경로 화이트리스트
+  // 서브도메인 추출
+  const parts = host.split(".");
+  const sub = parts.length > 2 ? parts[0] : ""; // admin | www | {tenant} | ""
+
+  // 서브도메인 매핑(관리자/병원)
+  let mapped = new URL(url); // 목적지 계산용
+  if (host.endsWith("." + ROOT)) {
+    if (sub === "admin") {
+      // admin.<root> -> /m 아래로
+      if (origPath === "/") mapped.pathname = "/m";
+      else if (!origPath.startsWith("/m")) mapped.pathname = `/m${origPath}`;
+    } else if (sub && sub !== "www") {
+      // {tenant}.<root> -> /r/{tenant} 아래로
+      if (origPath === "/") mapped.pathname = `/r/${sub}`;
+      else if (!origPath.startsWith(`/r/${sub}`)) mapped.pathname = `/r/${sub}${origPath}`;
+    }
+  }
+
+  const p = mapped.pathname;
+  const isApi = p.startsWith("/api/");
   const isPublic =
-    pathname === "/" ||
-    pathname === "/m/login" ||
-    pathname.startsWith("/r") ||
-    pathname.startsWith("/api/public/") ||
-    pathname.startsWith("/api/auth/") ||
-    pathname === "/api/csrf";
+    p === "/" ||
+    p === "/m/login" ||
+    p.startsWith("/r") ||
+    p.startsWith("/api/public/") ||
+    p.startsWith("/api/auth/") ||
+    p === "/api/csrf";
 
-  // 보호 대상
-  const needAuth = !isPublic && (pathname.startsWith("/m") || pathname.startsWith("/api/m"));
+  const needAuth = !isPublic && (p.startsWith("/m") || p.startsWith("/api/m"));
 
   // 인증 가드
   if (needAuth && !isAuthed(req)) {
@@ -37,25 +58,25 @@ export function middleware(req: NextRequest) {
         headers: { "content-type": "application/json; charset=utf-8" },
       });
     }
-    const to = req.nextUrl.clone();
+    const to = new URL(mapped);
     to.pathname = "/m/login";
-    // /m/login을 next로 주지 않도록 정규화
-    const next = pathname.startsWith("/m/login") ? "/m/dashboard" : pathname;
-    to.searchParams.set("next", next);
+    to.searchParams.set("next", p.startsWith("/m/login") ? "/m/dashboard" : p);
     return NextResponse.redirect(to);
   }
 
-  // 이미 로그인 상태로 /m/login 접근 시 대시보드로
-  if (pathname === "/m/login" && isAuthed(req)) {
-    const to = req.nextUrl.clone();
+  // 로그인 상태로 /m/login 접근시 대시보드로
+  if (p === "/m/login" && isAuthed(req)) {
+    const to = new URL(mapped);
     to.pathname = "/m/dashboard";
     to.search = "";
     return NextResponse.redirect(to);
   }
 
-  const res = NextResponse.next();
+  // 리라이트 결정
+  const changed = p !== origPath;
+  const res = changed ? NextResponse.rewrite(mapped) : NextResponse.next();
 
-  // 공용 헤더
+  // 공용 보안 헤더
   res.headers.set("x-url", req.nextUrl.toString());
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
@@ -63,7 +84,7 @@ export function middleware(req: NextRequest) {
   res.headers.set("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   if (isProd) res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
 
-  // CSP(개발 중 http 다움만 허용)
+  // 개발 편의 CSP
   const devScript = isProd ? [] : ["'unsafe-eval'", "'unsafe-inline'"];
   const devStyle = isProd ? [] : ["'unsafe-inline'"];
   const httpDaum = isProd ? [] : ["http://*.daumcdn.net", "http://*.daum.net"];
@@ -81,8 +102,8 @@ export function middleware(req: NextRequest) {
   ].join("; ");
   res.headers.set("Content-Security-Policy", csp);
 
-  // 공개 API 캐시
-  if (pathname.startsWith("/api/public/")) {
+  // 공개 API 캐시(페이지에만 적용)
+  if (p.startsWith("/api/public/")) {
     res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=600");
   }
 
