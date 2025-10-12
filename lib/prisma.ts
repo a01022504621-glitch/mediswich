@@ -2,7 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { getTenant } from "@/lib/tenant/als";
 
-// 병원별 스코프를 적용할 모델 목록 (hospitalId 컬럼이 있는 모델들)
+// 병원별 스코프 대상 모델
 const SCOPED_MODELS = new Set([
   "User",
   "HospitalDomain",
@@ -33,25 +33,21 @@ function withHospitalWhere(where: any, hospitalId: string) {
 
 function injectHospitalIdToData(data: any, hospitalId: string) {
   if (!hospitalId) return data;
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    if (data.hospitalId == null) data.hospitalId = hospitalId;
-    return data;
-  }
   if (Array.isArray(data)) {
-    return data.map((d) => (d && d.hospitalId == null ? { ...d, hospitalId } : d));
+    return data.map((d) => (d && (d as any).hospitalId == null ? { ...d, hospitalId } : d));
+  }
+  if (data && typeof data === "object") {
+    if ((data as any).hospitalId == null) (data as any).hospitalId = hospitalId;
   }
   return data;
 }
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+function createPrisma() {
+  const base = new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+  });
 
-const base = new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-});
-
-export const prisma =
-  globalForPrisma.prisma ??
-  base.$extends({
+  return base.$extends({
     query: {
       $allModels: {
         async findMany({ model, args, query }) {
@@ -157,7 +153,7 @@ export const prisma =
         async findUnique({ model, args, query }) {
           if (process.env.NODE_ENV === "development" && isScoped(model)) {
             console.warn(
-              `[MSW-TENANT] ${model}.findUnique 사용시 병원 격리를 보장하려면 findFirst + where.hospitalId 사용을 권장합니다.`,
+              `[MSW-TENANT] ${model}.findUnique 사용 시 격리를 보장하려면 findFirst + where.hospitalId 사용을 권장합니다.`,
             );
           }
           return query(args);
@@ -165,7 +161,7 @@ export const prisma =
         async update({ model, args, query }) {
           if (process.env.NODE_ENV === "development" && isScoped(model)) {
             console.warn(
-              `[MSW-TENANT] ${model}.update 사용시 병원 격리를 보장하려면 updateMany + where.hospitalId 사용을 권장합니다.`,
+              `[MSW-TENANT] ${model}.update 사용 시 격리를 보장하려면 updateMany + where.hospitalId 사용을 권장합니다.`,
             );
           }
           return query(args);
@@ -173,7 +169,7 @@ export const prisma =
         async delete({ model, args, query }) {
           if (process.env.NODE_ENV === "development" && isScoped(model)) {
             console.warn(
-              `[MSW-TENANT] ${model}.delete 사용시 병원 격리를 보장하려면 deleteMany + where.hospitalId 사용을 권장합니다.`,
+              `[MSW-TENANT] ${model}.delete 사용 시 격리를 보장하려면 deleteMany + where.hospitalId 사용을 권장합니다.`,
             );
           }
           return query(args);
@@ -181,6 +177,11 @@ export const prisma =
       },
     },
   });
+}
 
-if (process.env.NODE_ENV !== "production") (globalForPrisma.prisma as any) = prisma;
+type PrismaX = ReturnType<typeof createPrisma>;
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaX };
+
+export const prisma: PrismaX = globalForPrisma.prisma ?? createPrisma();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 

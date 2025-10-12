@@ -1,5 +1,7 @@
 // app/api/auth/change-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
+export const runtime = "nodejs";
+
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import bcrypt from "bcryptjs";
@@ -27,5 +29,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
-
 
