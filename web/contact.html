@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고객문의 | 메디스위치</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="header">
+        <div class="container">
+            <div class="logo">MediSwich</div>
+            <div class="header-right">
+                <nav class="nav">
+                    <a href="index.html" class="nav-item">홈</a>
+                    <div class="dropdown">
+                        <a href="about.html" class="nav-item">회사소개</a>
+                        <div class="dropdown-content">
+                            <a href="about.html#intro">사업소개</a>
+                            <a href="about.html#vision">비전</a>
+                            <a href="about.html#location">오시는길</a>
+                        </div>
+                    </div>
+                    <a href="service.html" class="nav-item">서비스</a>
+                    <div class="dropdown">
+                        <a href="contact.html" class="nav-item active">고객문의</a>
+                        <div class="dropdown-content">
+                            <a href="contact.html#contact-form-section">Contact</a>
+                            <a href="contact.html#faq">FAQ</a>
+                        </div>
+                    </div>
+                </nav>
+                <button id="open-contact-modal-contact" class="cta-button primary">서비스 소개서 다운로드</button>
+            </div>
+        </div>
+    </header>
+
+    <section id="page-hero" class="page-hero">
+        <div class="container">
+            <h1 class="fade-in-up">메디스위치에 문의하세요.</h1>
+            <p class="subtitle fade-in-up delay-1">운영 자동화에 대한 모든 궁금증을 해결해 드립니다.</p>
+        </div>
+    </section>
+
+    <section id="contact-form-section" class="contact-page-section">
+        <div class="container">
+            <h2 class="slide-in-left">CONTACT</h2>
+            <p class="form-page-subtitle">귀하의 문의사항을 남겨주시면, 메디스위치 전문가가 신속하게 연락드리겠습니다.</p>
+            
+            <form id="contact-form-page" class="contact-form-page-layout fade-in-up delay-1">
+                
+                <div class="form-group full-width">
+                    <label for="page-name">이름</label>
+                    <input type="text" id="page-name" name="name" required>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="page-hospital">병원명/회사명</label>
+                    <input type="text" id="page-hospital" name="hospital" required>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="page-phone">연락처</label>
+                    <input type="tel" id="page-phone" name="phone" required>
+                </div>
+                <div class="form-group full-width">
+                    <label for="page-email">이메일</label>
+                    <input type="email" id="page-email" name="email" required>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="page-message">문의 내용</label>
+                    <textarea id="page-message" name="message" rows="6" required></textarea>
+                </div>
+                
+                <button type="submit" class="cta-button primary large full-width">제출하고 서비스 소개서 받기</button>
+                <p class="form-info">개인정보는 문의 답변을 위해서만 사용되며, 철저히 보호됩니다.</p>
+            </form>
+        </div>
+    </section>
+
+    <section id="faq" class="faq-section">
+        <div class="container">
+            <h2 class="slide-in-right">자주 묻는 질문 (FAQ)</h2>
+            <div class="faq-list fade-in-up delay-1">
+                <details class="faq-item">
+                    <summary class="faq-question">Q. 메디스위치는 기존 병원 EMR/HIS와 연동이 가능한가요?</summary>
+                    <div class="faq-answer">
+                        <p>A. 네, 메디스위치는 EMR/HIS와의 유연한 연동 구조를 제공합니다. 웹훅 및 API 키 인증을 통한 데이터 교환 인터페이스를 갖추고 있으며, 개별 병원의 시스템 환경에 맞춘 연동 작업이 가능합니다.</p>
+                    </div>
+                </details>
+                <details class="faq-item">
+                    <summary class="faq-question">Q. 도입 절차는 얼마나 걸리며, 필요한 준비사항이 있나요?</summary>
+                    <div class="faq-answer">
+                        <p>A. 표준 도입 절차는 병원 등록, 패키지 및 용량 구성, 시범 운영 순으로 진행됩니다. 보통 2주~4주 내외로 완료되며, 기존 패키지 정보와 검사 코드만 준비해 주시면 됩니다.</p>
+                    </div>
+                </details>
+                 <details class="faq-item">
+                    <summary class="faq-question">Q. 월별 구독료 외에 숨겨진 비용이 있나요?</summary>
+                    <div class="faq-answer">
+                        <p>A. 메디스위스는 투명한 구독료 정책을 지향합니다. 월별 구독료 외에 카카오 알림톡/문자 발송 등 외부 게이트웨이 연동 시 발생하는 실비용만 추가됩니다. 초기 구축비용은 계약 조건에 따라 협의됩니다.</p>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </section>
+
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="#">이용약관</a>
+                <a href="#">개인정보 처리방침</a>
+                <a href="#">문의: contact@mediswich.com</a>
+            </div>
+        </div>
+    </footer>
+
+    <div id="contact-modal" class="modal">
+        <div class="modal-content scale-in">
+            <span class="close-button">&times;</span>
+             <h3>CONTACT</h3> 
+            <p>이름, 연락처를 남겨주시면 소개서와 함께 전문가가 연락드립니다.</p>
+            <form id="contact-form-modal">
+                <div class="form-group full-width">
+                    <label for="modal-name-c">이름</label>
+                    <input type="text" id="modal-name-c" name="name" required>
+                </div>
+                <div class="form-group full-width">
+                    <label for="modal-hospital-c">병원명/회사명</label>
+                    <input type="text" id="modal-hospital-c" name="hospital" required>
+                </div>
+                <div class="form-group full-width"> 
+                    <label for="modal-phone-c">연락처</label>
+                    <input type="tel" id="modal-phone-c" name="phone" required>
+                </div>
+                <div class="form-group full-width"> 
+                    <label for="modal-email-c">이메일</label>
+                    <input type="email" id="modal-email-c" name="email" required>
+                </div>
+                <button type="submit" class="cta-button primary large">제출하고 소개서 받기</button>
+            </form>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
