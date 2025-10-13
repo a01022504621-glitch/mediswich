@@ -1,6 +1,6 @@
 /* =====================================================
-CSS File: style.css (Final Stable Version - Click Toggle Dropdown)
-Purpose: All-in-one styles including responsive design and mobile header fix.
+CSS File: style.css (Definitive Final Version)
+Purpose: All-in-one styles with mobile layout fixes and UX improvements.
 ===================================================== */
 
 /* -------------------- 0. 기본 설정 및 변수 -------------------- */
@@ -24,13 +24,16 @@ Purpose: All-in-one styles including responsive design and mobile header fix.
 
     /* Interaction */
     --color-cta-hover: #005bb5;
-    --color-input-focus: #e0f7ff; 
+    --color-input-focus: rgba(0, 112, 243, 0.1); 
     
     /* Typography */
     --font-weight-regular: 400;
     --font-weight-medium: 500;
     --font-weight-bold: 700;
     --font-weight-extra: 800;
+    
+    /* Transitions & Animations */
+    --transition-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
     /* Header height for calc() */
     --header-h: 64px;
@@ -47,8 +50,10 @@ body {
     line-height: 1.6;
     color: var(--color-text-dark);
     background-color: var(--color-background);
-    transition: background-color 0.3s;
+    transition: background-color 0.3s ease;
     min-height: 100vh; 
+    /* ✨ 가로 스크롤 문제 해결 */
+    overflow-x: hidden;
 }
 
 .container {
@@ -97,12 +102,15 @@ h3 {
     top: 0;
     z-index: 1000;
     border-bottom: 1px solid var(--color-border); 
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
+/* ✨ Glassmorphism 헤더 효과 */
 .header.scrolled {
-    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.12); 
-    border-bottom-color: var(--color-border);
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: saturate(180%) blur(10px);
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08); 
+    border-bottom-color: transparent;
 }
 
 .header .container {
@@ -133,9 +141,22 @@ h3 {
     text-decoration: none;
     color: var(--color-text-dark);
     font-weight: var(--font-weight-medium);
-    transition: color 0.3s ease;
+    transition: color 0.3s var(--transition-smooth);
     padding: 10px 0; 
     display: block; 
+    position: relative;
+}
+
+/* ✨ 활성 메뉴 밑줄 효과 */
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: var(--color-primary);
+    border-radius: 2px;
 }
 
 .nav-item:hover, .dropdown:hover > .nav-item, .nav-item.active {
@@ -148,9 +169,22 @@ h3 {
     position: relative;
 }
 
-/* ✨ JS에서 클릭 이벤트를 위해 커서 모양 변경 */
 .dropdown > a {
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ✨ 드롭다운 화살표 아이콘 */
+.dropdown > a::after {
+    content: '▼';
+    font-size: 0.6em;
+    color: var(--color-text-light);
+    transition: transform 0.3s var(--transition-smooth);
+}
+.dropdown.active > a::after {
+    transform: rotate(180deg);
 }
 
 .dropdown-content {
@@ -186,7 +220,6 @@ h3 {
     color: var(--color-primary);
 }
 
-/* ✨ 수정된 부분: hover 대신 .active 클래스로 드롭다운 제어 */
 .dropdown.active .dropdown-content {
     display: block;
     opacity: 1;
@@ -201,22 +234,22 @@ h3 {
     border-radius: 8px;
     font-weight: var(--font-weight-bold);
     text-align: center;
-    transition: all 0.3s ease;
+    transition: all 0.3s var(--transition-smooth);
     border: 1px solid transparent;
     cursor: pointer; 
     white-space: nowrap; 
     display: inline-block;
 }
 
-.cta-button.primary {
-    background-color: var(--color-primary);
-    color: var(--color-background);
-}
-
+/* ✨ 인터랙티브 버튼 효과 */
 .cta-button.primary:hover {
     background-color: var(--color-cta-hover);
     box-shadow: 0 6px 20px rgba(0, 112, 243, 0.4);
     transform: translateY(-2px);
+}
+.cta-button.primary {
+    background-color: var(--color-primary);
+    color: var(--color-background);
 }
 
 .cta-button.secondary {
@@ -241,7 +274,7 @@ h3 {
 /* -------------------- 4. 섹션 공통 스타일 -------------------- */
 section {
     padding: 100px 0;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s ease;
 }
 
 section h2 {
@@ -259,8 +292,9 @@ section h2 {
     border-bottom: 1px solid var(--color-border);
 }
 
+/* ✨ 서브 페이지 상단 그라데이션 효과 */
 .page-hero { 
-    background-color: #e3f2fd; /* Light Blue for sub-pages */
+    background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
     padding: 180px 0 80px;
     text-align: center;
     border-bottom: 1px solid var(--color-border);
@@ -298,14 +332,14 @@ section h2 {
     border-radius: 16px;
     border: 1px solid var(--color-border);
     text-align: center;
-    transition: all 0.4s ease-out; 
+    transition: all 0.4s var(--transition-smooth); 
     box-shadow: var(--shadow-card); 
 }
 
 .value-card-new.hover-effect:hover {
     transform: translateY(-10px); 
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2); 
-    border-color: var(--color-secondary);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12); 
+    border-color: var(--color-primary);
 }
 
 .icon-circle {
@@ -320,7 +354,7 @@ section h2 {
     font-size: 2rem; 
     margin: 0 auto 25px;
     box-shadow: 0 5px 15px rgba(0, 112, 243, 0.4); 
-    transition: transform 0.5s;
+    transition: transform 0.5s var(--transition-smooth);
 }
 
 .value-card-new.hover-effect:hover .icon-circle {
@@ -328,7 +362,7 @@ section h2 {
 }
 
 
-/* -------------------- 7. 서비스 비교 섹션 (업그레이드: Card Grid) -------------------- */
+/* -------------------- 7. 서비스 비교 섹션 -------------------- */
 .comparison-section-new {
     background-color: var(--color-section-bg);
 }
@@ -337,16 +371,16 @@ section h2 {
     max-width: 1000px;
     margin: 0 auto;
     display: grid;
-    grid-template-columns: 1fr; /* 세로로 나열 */
+    grid-template-columns: 1fr;
     gap: 40px;
 }
 .comparison-item {
-    display: flex; /* 문제점 vs 해결책을 가로로 배치 */
+    display: flex;
     border: 1px solid var(--color-border);
     border-radius: 12px;
     overflow: hidden;
     box-shadow: var(--shadow-card);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s var(--transition-smooth);
 }
 .comparison-item:hover {
     transform: translateY(-5px);
@@ -396,7 +430,7 @@ section h2 {
     border-radius: 12px;
     background-color: var(--color-background);
     box-shadow: var(--shadow-light);
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: transform 0.3s var(--transition-smooth), box-shadow 0.3s var(--transition-smooth);
 }
 .value-intro-card:hover {
     transform: translateY(-5px);
@@ -449,7 +483,6 @@ section h2 {
     margin-right: 8px;
 }
 
-/* 오시는 길 섹션 */
 .location-section {
     background-color: var(--color-section-bg);
 }
@@ -476,7 +509,6 @@ section h2 {
     color: var(--color-text-dark);
 }
 
-/* 카카오맵 컨테이너 스타일 */
 .kakao-map-container {
     width: 100%;
     height: 450px; 
@@ -508,7 +540,7 @@ section h2 {
     border: 1px solid var(--color-border);
     box-shadow: var(--shadow-light);
     text-align: center;
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: transform 0.3s var(--transition-smooth), box-shadow 0.3s var(--transition-smooth);
 }
 .benefit-card:hover {
     transform: translateY(-5px);
@@ -537,7 +569,7 @@ section h2 {
     border-radius: 12px;
     border-left: 6px solid var(--color-secondary); 
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); 
-    transition: border-color 0.3s;
+    transition: border-color 0.3s var(--transition-smooth);
 }
 .review-card:hover {
     border-left-color: var(--color-primary);
@@ -554,7 +586,7 @@ section h2 {
     font-size: 0.9rem;
 }
 
-/* -------------------- 12. CONTACT 폼 섹션 (contact.html) - 한 줄 입력 반영 -------------------- */
+/* -------------------- 12. CONTACT 폼 섹션 -------------------- */
 .contact-page-section {
     background-color: var(--color-background);
     padding-bottom: 60px;
@@ -565,7 +597,7 @@ section h2 {
 }
 
 .contact-form-page-layout {
-    max-width: 550px; /* 너비 조정 */
+    max-width: 550px;
     margin: 0 auto;
     padding: 50px; 
     border: 1px solid var(--color-border);
@@ -589,23 +621,22 @@ section h2 {
     border: 1px solid var(--color-border);
     border-radius: 8px;
     font-size: 1rem;
-    transition: border-color 0.3s, box-shadow 0.3s;
+    transition: border-color 0.3s var(--transition-smooth), box-shadow 0.3s var(--transition-smooth);
 }
+
+/* ✨ 폼 디자인 개선 */
 .form-group input:focus, .form-group textarea:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 4px var(--color-input-focus);
     background-color: #fff;
     outline: none;
 }
-/* 한 줄 입력 요청에 따라, 이 요소들은 HTML에서 제거/변경되었지만, CSS는 안전하게 100%를 유지 */
+
 .form-row {
-    display: block; /* Flex 속성 제거 */
+    display: block; 
     gap: 0;
 }
-.form-group.half-width {
-    width: 100%;
-}
-.form-group.full-width {
+.form-group.half-width, .form-group.full-width {
     width: 100%;
 }
 .form-info {
@@ -638,7 +669,7 @@ section h2 {
     font-weight: var(--font-weight-bold);
     color: var(--color-text-dark);
     list-style: none;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s ease;
 }
 .faq-question:hover {
     background-color: #f1f5f9;
@@ -695,15 +726,14 @@ details[open] > summary.faq-question {
     color: #9ca3af;
     text-decoration: none;
     margin-left: 20px;
-    transition: color 0.3s;
+    transition: color 0.3s ease;
 }
 .footer-links a:hover {
     color: var(--color-background);
 }
 
-/* -------------------- 15. 모달 (CONTACT 팝업) - 중앙 정렬 및 제목 강화 -------------------- */
+/* -------------------- 15. 모달 (CONTACT 팝업) -------------------- */
 .modal {
-    /* 기본값: 숨김 */
     display: none; 
     position: fixed;
     z-index: 2000; 
@@ -711,16 +741,18 @@ details[open] > summary.faq-question {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.75); 
-    transition: background-color 0.4s ease;
+    background-color: rgba(0, 0, 0, 0.5); 
+    backdrop-filter: blur(5px);
+    transition: opacity 0.4s ease;
     justify-content: center; 
     align-items: center; 
     padding: 20px; 
-    overflow-y: auto;
+    opacity: 0;
 }
 
 .modal.open {
     display: flex; 
+    opacity: 1;
 }
 
 .modal-content {
@@ -733,7 +765,7 @@ details[open] > summary.faq-question {
     position: relative; 
     transform: scale(0.9); 
     opacity: 0;
-    transition: opacity 0.4s ease, transform 0.4s ease;
+    transition: opacity 0.4s var(--transition-smooth), transform 0.4s var(--transition-smooth);
     max-height: 95vh;
 }
 
@@ -763,7 +795,7 @@ details[open] > summary.faq-question {
     top: 5px;
     right: 15px;
     line-height: 1;
-    transition: color 0.2s;
+    transition: color 0.2s ease;
 }
 .close-button:hover {
     color: var(--color-text-dark);
@@ -773,8 +805,7 @@ details[open] > summary.faq-question {
 .fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in {
     opacity: 0;
     transform: translateY(30px); 
-    transition: opacity 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-                transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: opacity 0.9s var(--transition-smooth), transform 0.9s var(--transition-smooth);
 }
 .slide-in-left { transform: translateX(-50px); }
 .slide-in-right { transform: translateX(50px); }
@@ -786,18 +817,14 @@ details[open] > summary.faq-question {
     transform: translateY(0) translateX(0) scale(1) !important;
 }
 
+/* 딜레이 클래스는 그대로 유지 */
 .delay-1 { transition-delay: 0.1s; }
 .delay-2 { transition-delay: 0.2s; }
 .delay-3 { transition-delay: 0.3s; }
 .delay-4 { transition-delay: 0.4s; }
 .delay-5 { transition-delay: 0.5s; }
-.delay-6 { transition-delay: 0.6s; }
-.delay-7 { transition-delay: 0.7s; }
-.delay-8 { transition-delay: 0.8s; }
-
 
 /* -------------------- 17. 모바일 최적화 (Mobile Responsive) -------------------- */
-/* 햄버거 버튼 기본 숨김 */
 .menu-toggle-btn {
     display: none; 
     background: none;
@@ -806,14 +833,19 @@ details[open] > summary.faq-question {
     cursor: pointer;
     color: var(--color-text-dark);
     padding: 5px 10px;
+    /* ✨ 햄버거 버튼 부드러운 전환 효과 */
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+.menu-toggle-btn:hover {
+    color: var(--color-primary);
+}
+.header.menu-open .menu-toggle-btn {
+    transform: rotate(180deg);
 }
 
-.mobile-cta {
-    display: none; /* 데스크탑에서는 기본 숨김 */
-}
+/* ✨ 모바일 CTA는 JS에서 삭제되었으므로 CSS에서도 제거 */
 
 @media (max-width: 1024px) {
-    /* 1. 햄버거 버튼만 보이게 */
     .menu-toggle-btn {
         display: block; 
     }
@@ -827,12 +859,10 @@ details[open] > summary.faq-question {
         align-items: center;
         width: auto;
     }
-    /* 상단바 CTA 숨김 유지 */
     .header-right .cta-button {
         display: none; 
     }
 
-    /* 2. 네비게이션 패널 */
     .nav {
         display: flex; 
         position: absolute;
@@ -845,13 +875,12 @@ details[open] > summary.faq-question {
         background: var(--color-background); 
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         border-top: 1px solid var(--color-border);
-        transition: max-height 0.3s ease-in-out;
+        transition: max-height 0.35s ease-in-out;
         max-height: 0; 
         overflow: hidden; 
         z-index: 1100;
     }
 
-    /* 3. 열림 상태에서 스크롤 가능 */
     .header.menu-open .nav {
         max-height: calc(100vh - var(--header-h));
         overflow-y: auto;
@@ -863,17 +892,18 @@ details[open] > summary.faq-question {
         border-bottom: 1px solid var(--color-light-gray);
     }
     
-    /* 4. 드롭다운 메뉴: active로만 제어 */
+    .nav-item.active::after {
+        display: none;
+    }
+
     .dropdown {
         position: static; 
         width: 100%;
     }
-    /* ✨ hover 기능은 모바일에서 필요 없으므로 제거 */
     .dropdown:hover .dropdown-content {
         display: none;
     }
 
-    /* 5. 2차 메뉴 */
     .dropdown-content {
         position: static; 
         display: none; 
@@ -902,24 +932,6 @@ details[open] > summary.faq-question {
         border-bottom: none;
     }
 
-    /* 6. 모바일 하단 CTA 버튼(메뉴 맨 하단 고정) */
-    .mobile-cta {
-        display: block; /* 모바일에서 보이도록 설정 */
-        position: sticky;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        background: var(--color-background);
-        border-top: 1px solid var(--color-border);
-        padding: 12px 16px;
-    }
-    .mobile-cta .cta-button {
-        width: 100%;
-        display: block;
-    }
-
-    /* 1024px 이하에서의 그리드 조정 (기존 유지) */
     .value-grid-new, .benefits-grid, .reviews-grid, .value-intro-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -940,16 +952,29 @@ details[open] > summary.faq-question {
         flex-direction: row; 
         align-items: center;
     }
+    
+    /* ✨✨ 모바일 드롭다운 문제 해결: 불필요한 display:none 제거 ✨✨ */
+    .header-right {
+        /* 이전에 여기에 display: none; 이 있어 메뉴가 보이지 않았습니다. */
+        /* 이제는 이 규칙이 없으므로 nav가 정상적으로 표시됩니다. */
+        display: block; /* 명시적으로 block으로 설정하여 확실히 보이도록 함 */
+        position: static;
+        width: auto;
+    }
+    
+    .nav {
+        /* 헤더의 오른쪽 전체를 차지하도록 설정 */
+        position: absolute;
+    }
 
     .logo {
         flex-grow: 1; 
     }
 
-    /* 그리드 컬럼 변경 */
     .value-grid-new, .benefits-grid, .reviews-grid, .value-intro-grid {
         grid-template-columns: 1fr;
     }
-    /* 서비스 페이지 비교 차트 세로 나열 */
+    
     .comparison-item {
         flex-direction: column;
     }
@@ -960,7 +985,6 @@ details[open] > summary.faq-question {
     .problem-card { border-bottom: 2px solid #ef4444; }
     .solution-card { border-top: 2px solid var(--color-primary); }
 
-    /* About 페이지 */
     .vision-content {
         flex-direction: column;
         gap: 30px;
@@ -977,22 +1001,25 @@ details[open] > summary.faq-question {
         border-bottom: 3px solid var(--color-primary);
     }
     
-    /* CTA 푸터 */
     .cta-button.massive {
         font-size: 1.2rem;
         padding: 15px 30px;
     }
 
-    /* 푸터 레이아웃 */
     .footer .container {
         flex-direction: column;
         text-align: center;
+        gap: 15px;
+    }
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
     }
     .footer-links a {
-        margin: 0 10px;
+        margin: 5px 10px;
     }
     
-    /* 모달 */
     .modal-content {
         max-width: 95%;
     }
