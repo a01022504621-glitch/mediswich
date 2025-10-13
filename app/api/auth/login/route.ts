@@ -70,56 +70,56 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3) 입력 파싱
+    // 3) 입력 파싱(슬러그는 더 이상 받지 않음)
     const body = await req.json().catch(() => ({}));
     const emailRaw = typeof body.email === "string" ? body.email : "";
     const password = typeof body.password === "string" ? body.password : "";
-    const tenantRaw = body.tenant;
-
     if (!emailRaw || !password) {
       return NextResponse.json({ ok: false, message: "INVALID_INPUT" }, { status: 400 });
     }
-
     const email = emailRaw.trim().toLowerCase();
-    const tenant = typeof tenantRaw === "string" ? tenantRaw.trim().toLowerCase() : undefined;
 
-    // 4) 병원 결정
-    const hospital =
-      (tenant ? await prisma.hospital.findFirst({ where: { slug: tenant } }) : null) ||
-      (await prisma.hospital.findFirst({ orderBy: { id: "asc" } }));
-    if (!hospital) {
-      return NextResponse.json({ ok: false, message: "NO_HOSPITAL" }, { status: 400 });
-    }
-
-    // 5) 사용자 조회
+    // 4) 사용자 조회(이메일로 단일 사용자 식별)
     const user = await prisma.user.findFirst({
-      where: { hospitalId: hospital.id, email },
+      where: { email },
+      select: { id: true, email: true, password: true, role: true, hospitalId: true },
     });
     if (!user) {
       return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
     }
 
-    // 6) 비밀번호 검증
+    // 5) 비밀번호 검증
     const passOk = await bcrypt.compare(password, user.password);
     if (!passOk) {
       return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
     }
 
-    // 7) 세션 발급 (hospitalId가 null이면 키 생략)
+    // 6) 병원 결정(사용자 소속으로만 결정)
+    if (!user.hospitalId) {
+      return NextResponse.json({ ok: false, message: "USER_NOT_BOUND" }, { status: 409 });
+    }
+    const hospital = await prisma.hospital.findUnique({
+      where: { id: user.hospitalId },
+      select: { id: true, slug: true },
+    });
+    if (!hospital) {
+      return NextResponse.json({ ok: false, message: "HOSPITAL_NOT_FOUND" }, { status: 409 });
+    }
+
+    // 7) 세션 발급(병원 정보 포함)
     const payload: {
       sub: string;
       role: typeof user.role;
       hospitalSlug: string;
-      hospitalId?: string;
+      hospitalId: string;
     } = {
       sub: user.id,
       role: user.role,
       hospitalSlug: hospital.slug ?? String(hospital.id),
+      hospitalId: hospital.id,
     };
-    if (user.hospitalId) payload.hospitalId = user.hospitalId;
 
     const token = await signSession(payload);
-
     const res = NextResponse.json({ ok: true });
 
     const sc = sessionCookie(token, SESSION_TTL_SEC);
@@ -135,6 +135,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, message: "SERVER_ERROR" }, { status: 500 });
   }
 }
-
 
 
