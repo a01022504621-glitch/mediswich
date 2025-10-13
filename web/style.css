@@ -1,12 +1,10 @@
-/*
-=====================================================
-CSS File: style.css (Final Stable Version)
+/* =====================================================
+CSS File: style.css (Final Stable Version - Click Toggle Dropdown)
 Purpose: All-in-one styles including responsive design and mobile header fix.
-=====================================================
-*/
+===================================================== */
 
 /* -------------------- 0. 기본 설정 및 변수 -------------------- */
-:root { /* 💡 변수는 반드시 이 :root 블록 안에 있어야 합니다. */
+:root {
     /* Color Palette */
     --color-primary: #0070f3;  /* Blue */
     --color-secondary: #00c9a7;  /* Mint Green */
@@ -17,7 +15,7 @@ Purpose: All-in-one styles including responsive design and mobile header fix.
     --color-light-gray: #f9fafb; /* Very Light Background */
     --color-section-bg: #f3f4f6; /* Light Section Background */
     --color-border: #e5e7eb;
-    
+
     /* Shadows */
     --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.05);
     --shadow-medium: 0 8px 25px rgba(0, 0, 0, 0.15); 
@@ -33,6 +31,9 @@ Purpose: All-in-one styles including responsive design and mobile header fix.
     --font-weight-medium: 500;
     --font-weight-bold: 700;
     --font-weight-extra: 800;
+
+    /* Header height for calc() */
+    --header-h: 64px;
 }
 
 * {
@@ -89,14 +90,12 @@ h3 {
 
 /* -------------------- 2. 헤더 및 내비게이션 -------------------- */
 .header {
-    /* 🌟 모바일 배경 투명 문제 해결: 기본 배경색 흰색 고정 */
     background: var(--color-background); 
     padding: 15px 0;
     position: fixed;
     width: 100%;
     top: 0;
     z-index: 1000;
-    /* 스크롤되지 않았을 때도 기본 테두리 표시 */
     border-bottom: 1px solid var(--color-border); 
     transition: all 0.3s ease;
 }
@@ -149,6 +148,11 @@ h3 {
     position: relative;
 }
 
+/* ✨ JS에서 클릭 이벤트를 위해 커서 모양 변경 */
+.dropdown > a {
+    cursor: pointer;
+}
+
 .dropdown-content {
     display: none;
     position: absolute;
@@ -182,7 +186,8 @@ h3 {
     color: var(--color-primary);
 }
 
-.dropdown:hover .dropdown-content {
+/* ✨ 수정된 부분: hover 대신 .active 클래스로 드롭다운 제어 */
+.dropdown.active .dropdown-content {
     display: block;
     opacity: 1;
     transform: translateY(0);
@@ -592,7 +597,7 @@ section h2 {
     background-color: #fff;
     outline: none;
 }
-/* 🌟 한 줄 입력 요청에 따라, 이 요소들은 HTML에서 제거/변경되었지만, CSS는 안전하게 100%를 유지 */
+/* 한 줄 입력 요청에 따라, 이 요소들은 HTML에서 제거/변경되었지만, CSS는 안전하게 100%를 유지 */
 .form-row {
     display: block; /* Flex 속성 제거 */
     gap: 0;
@@ -698,9 +703,8 @@ details[open] > summary.faq-question {
 
 /* -------------------- 15. 모달 (CONTACT 팝업) - 중앙 정렬 및 제목 강화 -------------------- */
 .modal {
-    /* 🌟🌟🌟 기본값: 숨김 🌟🌟🌟 */
+    /* 기본값: 숨김 */
     display: none; 
-    
     position: fixed;
     z-index: 2000; 
     left: 0;
@@ -709,20 +713,16 @@ details[open] > summary.faq-question {
     height: 100%;
     background-color: rgba(0, 0, 0, 0.75); 
     transition: background-color 0.4s ease;
-    
-    /* Flexbox 정렬은 .modal.open 클래스에서만 활성화됩니다. */
-    justify-content: center; /* 수평 중앙 정렬 */
-    align-items: center; /* 수직 중앙 정렬 */
+    justify-content: center; 
+    align-items: center; 
     padding: 20px; 
     overflow-y: auto;
 }
 
 .modal.open {
-    /* 🌟🌟🌟 .open 클래스 추가 시 Flexbox를 사용하여 정중앙 정렬 활성화 🌟🌟🌟 */
     display: flex; 
 }
 
-/* 팝업 컨텐츠 */
 .modal-content {
     background-color: var(--color-background);
     padding: 35px; 
@@ -730,13 +730,10 @@ details[open] > summary.faq-question {
     width: 90%; 
     max-width: 450px; 
     box-shadow: var(--shadow-heavy); 
-    
     position: relative; 
-    
     transform: scale(0.9); 
     opacity: 0;
     transition: opacity 0.4s ease, transform 0.4s ease;
-
     max-height: 95vh;
 }
 
@@ -773,7 +770,6 @@ details[open] > summary.faq-question {
 }
 
 /* -------------------- 16. 애니메이션 (CSS) -------------------- */
-/* 초기 상태 (투명하고 이동된 상태) */
 .fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in {
     opacity: 0;
     transform: translateY(30px); 
@@ -785,13 +781,11 @@ details[open] > summary.faq-question {
 .scale-in { transform: scale(0.9); }
 .pop-in { transform: scale(0.6); }
 
-/* 최종 상태 (보여지는 상태) */
 .is-visible {
     opacity: 1 !important;
     transform: translateY(0) translateX(0) scale(1) !important;
 }
 
-/* 딜레이 */
 .delay-1 { transition-delay: 0.1s; }
 .delay-2 { transition-delay: 0.2s; }
 .delay-3 { transition-delay: 0.3s; }
@@ -814,47 +808,53 @@ details[open] > summary.faq-question {
     padding: 5px 10px;
 }
 
+.mobile-cta {
+    display: none; /* 데스크탑에서는 기본 숨김 */
+}
+
 @media (max-width: 1024px) {
-    /* 1. 햄버거 버튼 표시 및 위치 조정 */
+    /* 1. 햄버거 버튼만 보이게 */
     .menu-toggle-btn {
         display: block; 
     }
     .header .container {
-        /* 로고와 햄버거/CTA를 양쪽 끝으로 */
         flex-direction: row; 
         align-items: center;
     }
     .header-right {
-        /* 모바일에서는 .nav와 .cta-button을 숨겨야 하므로, 플렉스 속성 유지 */
         flex-direction: row;
         gap: 10px;
         align-items: center;
         width: auto;
     }
-    
-    /* 2. 네비게이션 메뉴 기본 숨김 (데스크톱 스타일 재정의) */
+    /* 상단바 CTA 숨김 유지 */
+    .header-right .cta-button {
+        display: none; 
+    }
+
+    /* 2. 네비게이션 패널 */
     .nav {
-        display: none; /* 기본 숨김 */
+        display: flex; 
         position: absolute;
-        top: 100%; /* 헤더 바로 아래에 위치 */
+        top: 100%; 
         left: 0;
         width: 100%;
         flex-direction: column;
         align-items: flex-start;
         gap: 0; 
-        /* 🌟 모바일 메뉴 배경색도 흰색으로 명확히 */
         background: var(--color-background); 
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         border-top: 1px solid var(--color-border);
         transition: max-height 0.3s ease-in-out;
         max-height: 0; 
-        overflow: hidden;
+        overflow: hidden; 
+        z-index: 1100;
     }
-    
-    /* 3. 'menu-open' 클래스가 있을 때 메뉴 표시 (JS로 제어) */
+
+    /* 3. 열림 상태에서 스크롤 가능 */
     .header.menu-open .nav {
-        display: flex;
-        max-height: 500px; /* 펼침 */
+        max-height: calc(100vh - var(--header-h));
+        overflow-y: auto;
     }
     
     .nav-item {
@@ -863,56 +863,63 @@ details[open] > summary.faq-question {
         border-bottom: 1px solid var(--color-light-gray);
     }
     
-    /* 4. 드롭다운 메뉴 처리 (중요) */
+    /* 4. 드롭다운 메뉴: active로만 제어 */
     .dropdown {
-        position: static; /* 모바일에서 position: absolute 해제 */
+        position: static; 
         width: 100%;
     }
-    /* 데스크톱의 :hover 기능 비활성화 */
+    /* ✨ hover 기능은 모바일에서 필요 없으므로 제거 */
     .dropdown:hover .dropdown-content {
         display: none;
-        opacity: 0;
-        transform: translateY(10px);
-        pointer-events: none;
     }
 
-    /* 5. 2차 메뉴 기본 숨김 및 모바일 스타일 */
+    /* 5. 2차 메뉴 */
     .dropdown-content {
-        position: static; /* absolute 해제 */
-        display: none; /* 기본 숨김 */
+        position: static; 
+        display: none; 
         width: 100%;
         min-width: 100%;
         box-shadow: none;
         border: none;
         border-radius: 0;
         padding: 0;
-        background-color: var(--color-light-gray); /* 2차 메뉴 배경색 변경 */
+        background-color: var(--color-light-gray); 
         opacity: 1;
         transform: none;
         pointer-events: auto;
     }
+    .dropdown.active .dropdown-content {
+        display: flex;
+        flex-direction: column;
+    }
 
     .dropdown-content a {
-        padding: 8px 30px; /* 1차 메뉴보다 들여쓰기 */
+        padding: 8px 30px; 
         font-size: 0.9rem;
         border-bottom: 1px solid var(--color-border);
     }
     .dropdown-content a:last-child {
         border-bottom: none;
     }
-    
-    /* 6. 'active' 클래스가 있을 때 드롭다운 표시 (JS로 제어) */
-    .dropdown.active .dropdown-content {
-        display: flex;
-        flex-direction: column;
+
+    /* 6. 모바일 하단 CTA 버튼(메뉴 맨 하단 고정) */
+    .mobile-cta {
+        display: block; /* 모바일에서 보이도록 설정 */
+        position: sticky;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        background: var(--color-background);
+        border-top: 1px solid var(--color-border);
+        padding: 12px 16px;
+    }
+    .mobile-cta .cta-button {
+        width: 100%;
+        display: block;
     }
 
-    /* 7. CTA 버튼 처리 */
-    .header-right .cta-button {
-        display: none; /* 모바일 메뉴에 포함시키지 않는다면 숨기기 */
-    }
-    
-    /* 1024px 이하에서의 그리드 조정 */
+    /* 1024px 이하에서의 그리드 조정 (기존 유지) */
     .value-grid-new, .benefits-grid, .reviews-grid, .value-intro-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -929,18 +936,13 @@ details[open] > summary.faq-question {
     .subtitle { font-size: 1.1rem; }
     section { padding: 80px 0; }
     
-    /* 헤더 모바일 레이아웃 */
     .header .container {
-        /* 로고와 햄버거 버튼을 한 줄에 유지 */
         flex-direction: row; 
         align-items: center;
     }
-    .header-right {
-        /* CTA 버튼은 768px 이하에서 숨기거나, 필요하다면 토글 메뉴 안으로 이동 */
-        display: none; 
-    }
+
     .logo {
-        flex-grow: 1; /* 로고가 공간을 채우고 햄버거 버튼을 오른쪽으로 밀어냅니다. */
+        flex-grow: 1; 
     }
 
     /* 그리드 컬럼 변경 */
@@ -985,9 +987,6 @@ details[open] > summary.faq-question {
     .footer .container {
         flex-direction: column;
         text-align: center;
-    }
-    .footer-links {
-        margin-top: 15px;
     }
     .footer-links a {
         margin: 0 10px;

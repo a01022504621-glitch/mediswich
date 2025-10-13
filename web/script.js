@@ -1,32 +1,33 @@
+/*
+=====================================================
+JavaScript File: script.js (Final Stable Version - Hamburger Button Creation Restored)
+=====================================================
+*/
 document.addEventListener('DOMContentLoaded', () => {
     
     // ----------------------------------------------------
-    // 0. 공통 요소 정의 (다른 기능에서도 사용)
+    // 0. 공통 요소 정의
     // ----------------------------------------------------
     const header = document.querySelector('.header');
 
     // ----------------------------------------------------
-    // 1. 초기 애니메이션 (헤더 로고와 메뉴) - DOMContentLoaded 안에서 실행
+    // 1. 초기 애니메이션 (헤더 로고와 메뉴)
     // ----------------------------------------------------
     const runInitialAnimations = () => {
         const logo = document.querySelector('.logo');
         const ctaButton = document.querySelector('.header .cta-button');
         const navItems = document.querySelectorAll('.nav > a, .dropdown');
 
-        // 헤더 요소가 없으면 애니메이션 실행하지 않음
         if (!logo && navItems.length === 0 && !ctaButton) return; 
 
-        // 모든 애니메이션 클래스를 초기 상태로 되돌립니다.
         document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in').forEach(el => {
             el.classList.remove('is-visible');
         });
         
-        // 로고 애니메이션
         if (logo) setTimeout(() => { logo.classList.add('is-visible'); }, 100);
         
         let delay = 100;
         
-        // 메뉴 항목 애니메이션
         navItems.forEach((item) => {
             setTimeout(() => {
                 item.classList.add('is-visible');
@@ -34,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
             delay += 100;
         });
 
-        // CTA 버튼 애니메이션
         if (ctaButton) {
             setTimeout(() => {
                 ctaButton.classList.add('is-visible');
@@ -42,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // DOMContentLoaded 시점에 초기 애니메이션 실행
     runInitialAnimations();
 
 
@@ -61,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('is-visible');
-                // 한 번 보이면 관찰을 중단하여 불필요한 연산을 막습니다.
                 observer.unobserve(entry.target); 
             }
         });
@@ -85,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
-    // 4. CONTACT 모달 기능 구현 (모든 페이지에 공통 적용)
+    // 4. CONTACT 모달 기능 구현 
     // ----------------------------------------------------
     const modal = document.getElementById('contact-modal');
     const openBtns = document.querySelectorAll('[id^="open-contact-modal"]'); 
@@ -121,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 모달 폼 제출 처리 (소개서 다운로드)
+    // 모달 폼 제출 처리 
     if (modalForm) {
         modalForm.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -148,65 +146,106 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
-    // 6. 모바일 메뉴 토글 기능 구현 (햄버거 버튼 오류 수정 완료)
+    // 6. 모바일 메뉴 토글 기능 (햄버거 버튼 생성 로직 복원)
     // ----------------------------------------------------
-    
     if (header) {
-        // HTML에 햄버거 버튼이 없으므로, JavaScript로 생성합니다.
+        // ✨✨✨ 사라진 햄버거 버튼 생성 로직 복원 (수정된 부분) ✨✨✨
         let menuToggleBtn = document.querySelector('.menu-toggle-btn');
         if (!menuToggleBtn) {
             menuToggleBtn = document.createElement('button');
             menuToggleBtn.classList.add('menu-toggle-btn');
-            menuToggleBtn.innerHTML = '&#9776;'; // 햄버거 아이콘
+            menuToggleBtn.setAttribute('aria-label', '메뉴 열기/닫기');
+            menuToggleBtn.innerHTML = '&#9776;'; // 햄버거 아이콘 기본값
             
             const headerContainer = document.querySelector('.header .container');
             if (headerContainer) {
-                // 로고와 CTA 사이에 배치하기 위해 .header-right 앞에 추가
                 const headerRight = document.querySelector('.header-right');
                 if (headerRight) {
+                    // .header-right 요소 앞에 햄버거 버튼 추가
                     headerContainer.insertBefore(menuToggleBtn, headerRight);
                 } else {
+                    // .header-right가 없다면 그냥 컨테이너에 추가
                     headerContainer.appendChild(menuToggleBtn);
                 }
             }
         }
+        // ✨✨✨ 여기까지가 복원된 코드입니다. ✨✨✨
 
-        // 햄버거 버튼 클릭 이벤트 처리: 전체 헤더에 menu-open 클래스 토글
+        // 햄버거 버튼 클릭 이벤트 처리
         if (menuToggleBtn) {
-            menuToggleBtn.addEventListener('click', () => {
+            menuToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 이벤트 버블링 방지
                 header.classList.toggle('menu-open');
-                // 모바일 메뉴 열릴 때 body 스크롤 방지
+                
                 if (header.classList.contains('menu-open')) {
-                    document.body.style.overflow = 'hidden';
+                    menuToggleBtn.innerHTML = '&times;';
                 } else {
-                    document.body.style.overflow = '';
+                    menuToggleBtn.innerHTML = '&#9776;';
                 }
             });
         }
     }
 
+    // ----------------------------------------------------
+    // 7. 데스크톱 & 모바일 드롭다운 클릭 토글 기능
+    // ----------------------------------------------------
+    const dropdowns = document.querySelectorAll('.dropdown');
 
-    // 7. 드롭다운 메뉴 토글 (모바일에서 1차 메뉴 클릭 시 2차 메뉴 열기)
-    const dropdowns = document.querySelectorAll('.dropdown > a');
-
-    dropdowns.forEach(dropdownLink => {
-        // 1차 메뉴 링크 클릭 이벤트 처리
+    dropdowns.forEach(dropdown => {
+        const dropdownLink = dropdown.querySelector('a');
         dropdownLink.addEventListener('click', (e) => {
-            // CSS에서 설정한 모바일 레이아웃 Breakpoint(1024px) 이하에서만 작동
-            if (window.innerWidth <= 1024) { 
-                const parentDropdown = dropdownLink.parentElement;
+            e.preventDefault(); // 링크 이동 방지
+            e.stopPropagation(); // 외부 클릭 이벤트와의 충돌 방지
+            
+            const isActive = dropdown.classList.contains('active');
 
-                // 이미 활성화된 다른 드롭다운 닫기
-                document.querySelectorAll('.dropdown.active').forEach(activeDropdown => {
-                    if (activeDropdown !== parentDropdown) {
-                        activeDropdown.classList.remove('active');
-                    }
-                });
-                
-                // 현재 드롭다운 토글
-                e.preventDefault();
-                parentDropdown.classList.toggle('active');
+            // 모든 드롭다운 메뉴를 먼저 닫음
+            document.querySelectorAll('.dropdown.active').forEach(activeDropdown => {
+                activeDropdown.classList.remove('active');
+            });
+
+            // 현재 클릭한 메뉴가 닫혀있었다면 다시 연다
+            if (!isActive) {
+                dropdown.classList.add('active');
             }
         });
     });
+
+    // 외부 클릭 시 드롭다운 및 모바일 메뉴 닫기 기능
+    window.addEventListener('click', (e) => {
+        // 드롭다운 닫기
+        if (!e.target.closest('.dropdown')) {
+            document.querySelectorAll('.dropdown.active').forEach(dropdown => {
+                dropdown.classList.remove('active');
+            });
+        }
+        
+        // 모바일 메뉴 닫기
+        const menuToggleBtn = document.querySelector('.menu-toggle-btn');
+        if (header.classList.contains('menu-open') && !e.target.closest('.header')) {
+             header.classList.remove('menu-open');
+             if(menuToggleBtn) menuToggleBtn.innerHTML = '&#9776;';
+        }
+    });
+
+
+    // ----------------------------------------------------
+    // 8. '서비스 소개서 다운로드' 버튼 동적 추가
+    // ----------------------------------------------------
+    const navMenu = document.querySelector('.nav');
+    if (navMenu) {
+        const mobileCtaContainer = document.createElement('div');
+        mobileCtaContainer.classList.add('mobile-cta');
+
+        const ctaLink = document.createElement('a');
+        ctaLink.href = "#";
+        ctaLink.id = 'open-contact-modal-mobile-menu';
+        ctaLink.className = 'cta-button primary';
+        ctaLink.textContent = '서비스 소개서 다운로드';
+
+        ctaLink.addEventListener('click', openModal);
+        
+        mobileCtaContainer.appendChild(ctaLink);
+        navMenu.appendChild(mobileCtaContainer);
+    }
 });
