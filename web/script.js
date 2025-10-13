@@ -46,23 +46,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // ----------------------------------------------------
-    // 2. ✨ 스크롤 시 요소 나타나기 애니메이션 (반복 실행되도록 수정)
+    // 2. 스크롤 시 요소 나타나기 애니메이션 (반복 실행)
     // ----------------------------------------------------
     const animateElements = document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in');
 
     const observerOptions = {
         root: null, 
         rootMargin: '0px',
-        threshold: 0.1 // 더 빨리 반응하도록 threshold 조정
+        threshold: 0.1
     };
 
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            // 화면에 보이면 is-visible 클래스 추가
             if (entry.isIntersecting) {
                 entry.target.classList.add('is-visible');
             } 
-            // ✨ 화면에서 사라지면 is-visible 클래스 제거 (애니메이션 반복을 위함)
             else {
                 entry.target.classList.remove('is-visible');
             }
@@ -218,7 +216,4 @@ document.addEventListener('DOMContentLoaded', () => {
              if(menuToggleBtn) menuToggleBtn.innerHTML = '&#9776;';
         }
     });
-
-    // ✨ 8. 모바일 CTA 버튼 동적 추가 기능 제거
-    // 요청에 따라 해당 기능은 삭제되었습니다.
 });
