@@ -1,22 +1,21 @@
 /*
 =====================================================
-CSS File: style.css (Final Final FINAL Version - Modal Display Fix)
-Purpose: Solves the issue where the modal displays immediately on page load, 
-         while retaining the perfect central alignment (using Flexbox).
+CSS File: style.css (Final Stable Version)
+Purpose: All-in-one styles including responsive design and mobile header fix.
 =====================================================
 */
 
 /* -------------------- 0. 기본 설정 및 변수 -------------------- */
-:root {
+:root { /* 💡 변수는 반드시 이 :root 블록 안에 있어야 합니다. */
     /* Color Palette */
-    --color-primary: #0070f3;       /* Blue */
-    --color-secondary: #00c9a7;     /* Mint Green */
-    --color-accent: #f9a825;        /* Amber (for emphasis) */
-    --color-text-dark: #1f2937;     /* Deep Gray */
-    --color-text-light: #4b5563;    /* Medium Gray */
+    --color-primary: #0070f3;  /* Blue */
+    --color-secondary: #00c9a7;  /* Mint Green */
+    --color-accent: #f9a825; /* Amber (for emphasis) */
+    --color-text-dark: #1f2937;  /* Deep Gray */
+    --color-text-light: #4b5563; /* Medium Gray */
     --color-background: #ffffff;
-    --color-light-gray: #f9fafb;    /* Very Light Background */
-    --color-section-bg: #f3f4f6;    /* Light Section Background */
+    --color-light-gray: #f9fafb; /* Very Light Background */
+    --color-section-bg: #f3f4f6; /* Light Section Background */
     --color-border: #e5e7eb;
     
     /* Shadows */
@@ -90,13 +89,15 @@ h3 {
 
 /* -------------------- 2. 헤더 및 내비게이션 -------------------- */
 .header {
-    background: var(--color-background);
+    /* 🌟 모바일 배경 투명 문제 해결: 기본 배경색 흰색 고정 */
+    background: var(--color-background); 
     padding: 15px 0;
     position: fixed;
     width: 100%;
     top: 0;
     z-index: 1000;
-    border-bottom: 1px solid transparent;
+    /* 스크롤되지 않았을 때도 기본 테두리 표시 */
+    border-bottom: 1px solid var(--color-border); 
     transition: all 0.3s ease;
 }
 
@@ -802,7 +803,115 @@ details[open] > summary.faq-question {
 
 
 /* -------------------- 17. 모바일 최적화 (Mobile Responsive) -------------------- */
+/* 햄버거 버튼 기본 숨김 */
+.menu-toggle-btn {
+    display: none; 
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--color-text-dark);
+    padding: 5px 10px;
+}
+
 @media (max-width: 1024px) {
+    /* 1. 햄버거 버튼 표시 및 위치 조정 */
+    .menu-toggle-btn {
+        display: block; 
+    }
+    .header .container {
+        /* 로고와 햄버거/CTA를 양쪽 끝으로 */
+        flex-direction: row; 
+        align-items: center;
+    }
+    .header-right {
+        /* 모바일에서는 .nav와 .cta-button을 숨겨야 하므로, 플렉스 속성 유지 */
+        flex-direction: row;
+        gap: 10px;
+        align-items: center;
+        width: auto;
+    }
+    
+    /* 2. 네비게이션 메뉴 기본 숨김 (데스크톱 스타일 재정의) */
+    .nav {
+        display: none; /* 기본 숨김 */
+        position: absolute;
+        top: 100%; /* 헤더 바로 아래에 위치 */
+        left: 0;
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0; 
+        /* 🌟 모바일 메뉴 배경색도 흰색으로 명확히 */
+        background: var(--color-background); 
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-top: 1px solid var(--color-border);
+        transition: max-height 0.3s ease-in-out;
+        max-height: 0; 
+        overflow: hidden;
+    }
+    
+    /* 3. 'menu-open' 클래스가 있을 때 메뉴 표시 (JS로 제어) */
+    .header.menu-open .nav {
+        display: flex;
+        max-height: 500px; /* 펼침 */
+    }
+    
+    .nav-item {
+        padding: 12px 20px;
+        width: 100%;
+        border-bottom: 1px solid var(--color-light-gray);
+    }
+    
+    /* 4. 드롭다운 메뉴 처리 (중요) */
+    .dropdown {
+        position: static; /* 모바일에서 position: absolute 해제 */
+        width: 100%;
+    }
+    /* 데스크톱의 :hover 기능 비활성화 */
+    .dropdown:hover .dropdown-content {
+        display: none;
+        opacity: 0;
+        transform: translateY(10px);
+        pointer-events: none;
+    }
+
+    /* 5. 2차 메뉴 기본 숨김 및 모바일 스타일 */
+    .dropdown-content {
+        position: static; /* absolute 해제 */
+        display: none; /* 기본 숨김 */
+        width: 100%;
+        min-width: 100%;
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        background-color: var(--color-light-gray); /* 2차 메뉴 배경색 변경 */
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+    }
+
+    .dropdown-content a {
+        padding: 8px 30px; /* 1차 메뉴보다 들여쓰기 */
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .dropdown-content a:last-child {
+        border-bottom: none;
+    }
+    
+    /* 6. 'active' 클래스가 있을 때 드롭다운 표시 (JS로 제어) */
+    .dropdown.active .dropdown-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* 7. CTA 버튼 처리 */
+    .header-right .cta-button {
+        display: none; /* 모바일 메뉴에 포함시키지 않는다면 숨기기 */
+    }
+    
     /* 1024px 이하에서의 그리드 조정 */
     .value-grid-new, .benefits-grid, .reviews-grid, .value-intro-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -822,35 +931,16 @@ details[open] > summary.faq-question {
     
     /* 헤더 모바일 레이아웃 */
     .header .container {
-        flex-direction: column;
-        align-items: flex-start;
+        /* 로고와 햄버거 버튼을 한 줄에 유지 */
+        flex-direction: row; 
+        align-items: center;
     }
     .header-right {
-        flex-direction: column;
-        align-items: stretch; 
-        width: 100%;
-        gap: 10px;
+        /* CTA 버튼은 768px 이하에서 숨기거나, 필요하다면 토글 메뉴 안으로 이동 */
+        display: none; 
     }
-    .nav {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0; 
-        width: 100%;
-        margin-top: 10px;
-    }
-    .dropdown-content {
-        position: relative; 
-        left: 0;
-        width: 90%; 
-        box-shadow: none;
-        border: none;
-        border-radius: 0;
-        padding-left: 20px;
-        margin-top: 0;
-    }
-    .cta-button {
-        width: 100%;
-        margin-top: 10px;
+    .logo {
+        flex-grow: 1; /* 로고가 공간을 채우고 햄버거 버튼을 오른쪽으로 밀어냅니다. */
     }
 
     /* 그리드 컬럼 변경 */
