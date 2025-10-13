@@ -1,5 +1,5 @@
 /* =====================================================
-CSS File: style.css (Definitive Final Version)
+CSS File: style.css (Definitive Final Version - Overflow Perfected)
 Purpose: All-in-one styles with mobile layout fixes and UX improvements.
 ===================================================== */
 
@@ -45,15 +45,15 @@ Purpose: All-in-one styles with mobile layout fixes and UX improvements.
     padding: 0;
 }
 
-body {
+/* ✨✨ 최종 수정: html과 body 모두에 overflow-x: hidden 적용 ✨✨ */
+html, body {
     font-family: 'Pretendard', sans-serif;
     line-height: 1.6;
     color: var(--color-text-dark);
     background-color: var(--color-background);
     transition: background-color 0.3s ease;
     min-height: 100vh; 
-    /* ✨ 가로 스크롤 문제 해결 */
-    overflow-x: hidden;
+    overflow-x: hidden; /* 가로 스크롤 원천 차단 */
 }
 
 .container {
@@ -67,6 +67,7 @@ h1, h2, h3 {
     line-height: 1.25;
     font-weight: var(--font-weight-extra);
     color: var(--color-text-dark);
+    word-break: keep-all; /* 문단 중간에 글자가 잘리는 현상 방지 */
 }
 
 h1 { 
@@ -109,6 +110,7 @@ h3 {
 .header.scrolled {
     background-color: rgba(255, 255, 255, 0.85);
     backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px); /* Safari 지원 */
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08); 
     border-bottom-color: transparent;
 }
@@ -241,15 +243,16 @@ h3 {
     display: inline-block;
 }
 
+.cta-button.primary {
+    background-color: var(--color-primary);
+    color: var(--color-background);
+}
+
 /* ✨ 인터랙티브 버튼 효과 */
 .cta-button.primary:hover {
     background-color: var(--color-cta-hover);
     box-shadow: 0 6px 20px rgba(0, 112, 243, 0.4);
     transform: translateY(-2px);
-}
-.cta-button.primary {
-    background-color: var(--color-primary);
-    color: var(--color-background);
 }
 
 .cta-button.secondary {
@@ -804,9 +807,9 @@ details[open] > summary.faq-question {
 /* -------------------- 16. 애니메이션 (CSS) -------------------- */
 .fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in {
     opacity: 0;
-    transform: translateY(30px); 
     transition: opacity 0.9s var(--transition-smooth), transform 0.9s var(--transition-smooth);
 }
+.fade-in-up { transform: translateY(30px); }
 .slide-in-left { transform: translateX(-50px); }
 .slide-in-right { transform: translateX(50px); }
 .scale-in { transform: scale(0.9); }
@@ -814,10 +817,9 @@ details[open] > summary.faq-question {
 
 .is-visible {
     opacity: 1 !important;
-    transform: translateY(0) translateX(0) scale(1) !important;
+    transform: translate(0, 0) scale(1) !important;
 }
 
-/* 딜레이 클래스는 그대로 유지 */
 .delay-1 { transition-delay: 0.1s; }
 .delay-2 { transition-delay: 0.2s; }
 .delay-3 { transition-delay: 0.3s; }
@@ -833,7 +835,6 @@ details[open] > summary.faq-question {
     cursor: pointer;
     color: var(--color-text-dark);
     padding: 5px 10px;
-    /* ✨ 햄버거 버튼 부드러운 전환 효과 */
     transition: transform 0.3s ease, color 0.3s ease;
 }
 .menu-toggle-btn:hover {
@@ -843,7 +844,6 @@ details[open] > summary.faq-question {
     transform: rotate(180deg);
 }
 
-/* ✨ 모바일 CTA는 JS에서 삭제되었으므로 CSS에서도 제거 */
 
 @media (max-width: 1024px) {
     .menu-toggle-btn {
@@ -955,15 +955,12 @@ details[open] > summary.faq-question {
     
     /* ✨✨ 모바일 드롭다운 문제 해결: 불필요한 display:none 제거 ✨✨ */
     .header-right {
-        /* 이전에 여기에 display: none; 이 있어 메뉴가 보이지 않았습니다. */
-        /* 이제는 이 규칙이 없으므로 nav가 정상적으로 표시됩니다. */
-        display: block; /* 명시적으로 block으로 설정하여 확실히 보이도록 함 */
+        display: block;
         position: static;
         width: auto;
     }
     
     .nav {
-        /* 헤더의 오른쪽 전체를 차지하도록 설정 */
         position: absolute;
     }
 
