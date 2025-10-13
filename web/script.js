@@ -1,185 +1,212 @@
 document.addEventListener('DOMContentLoaded', () => {
-  /* ---------- 공통 ---------- */
-  const header = document.querySelector('.header');
-  const headerContainer = header?.querySelector('.container') || null;
-  const headerRight = header?.querySelector('.header-right') || null;
-  const nav = header?.querySelector('.nav') || document.querySelector('.nav');
+    
+    // ----------------------------------------------------
+    // 0. 공통 요소 정의 (다른 기능에서도 사용)
+    // ----------------------------------------------------
+    const header = document.querySelector('.header');
 
-  /* ---------- 1) 초기 애니메이션 ---------- */
-  function runInitialAnimations() {
-    const logo = document.querySelector('.logo');
-    const ctaButton = document.querySelector('.header .cta-button');
-    const navItems = document.querySelectorAll('.nav > a, .dropdown');
+    // ----------------------------------------------------
+    // 1. 초기 애니메이션 (헤더 로고와 메뉴) - DOMContentLoaded 안에서 실행
+    // ----------------------------------------------------
+    const runInitialAnimations = () => {
+        const logo = document.querySelector('.logo');
+        const ctaButton = document.querySelector('.header .cta-button');
+        const navItems = document.querySelectorAll('.nav > a, .dropdown');
 
-    if (!logo && navItems.length === 0 && !ctaButton) return;
+        // 헤더 요소가 없으면 애니메이션 실행하지 않음
+        if (!logo && navItems.length === 0 && !ctaButton) return; 
 
-    document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in')
-      .forEach(el => el.classList.remove('is-visible'));
+        // 모든 애니메이션 클래스를 초기 상태로 되돌립니다.
+        document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in').forEach(el => {
+            el.classList.remove('is-visible');
+        });
+        
+        // 로고 애니메이션
+        if (logo) setTimeout(() => { logo.classList.add('is-visible'); }, 100);
+        
+        let delay = 100;
+        
+        // 메뉴 항목 애니메이션
+        navItems.forEach((item) => {
+            setTimeout(() => {
+                item.classList.add('is-visible');
+            }, delay);
+            delay += 100;
+        });
 
-    if (logo) setTimeout(() => logo.classList.add('is-visible'), 100);
-
-    let delay = 100;
-    navItems.forEach(item => {
-      setTimeout(() => item.classList.add('is-visible'), delay);
-      delay += 100;
-    });
-
-    if (ctaButton) setTimeout(() => ctaButton.classList.add('is-visible'), delay);
-  }
-  runInitialAnimations();
-
-  /* ---------- 2) 뷰포트 진입 애니메이션 ---------- */
-  const animatedEls = document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in');
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-          io.unobserve(entry.target);
+        // CTA 버튼 애니메이션
+        if (ctaButton) {
+            setTimeout(() => {
+                ctaButton.classList.add('is-visible');
+            }, delay);
         }
-      });
-    }, { root: null, rootMargin: '0px', threshold: 0.15 });
-    animatedEls.forEach(el => io.observe(el));
-  } else {
-    animatedEls.forEach(el => el.classList.add('is-visible')); // 폴백
-  }
-
-  /* ---------- 3) 헤더 스크롤 스타일 ---------- */
-  if (header) {
-    const onScroll = () => {
-      if (window.scrollY > 80) header.classList.add('scrolled');
-      else header.classList.remove('scrolled');
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-  }
+    
+    // DOMContentLoaded 시점에 초기 애니메이션 실행
+    runInitialAnimations();
 
-  /* ---------- 4) CONTACT 모달 ---------- */
-  const modal = document.getElementById('contact-modal');
-  const openBtns = document.querySelectorAll('[id^="open-contact-modal"]');
-  const closeBtn = document.querySelector('.modal .close-button');
-  const modalForm = document.getElementById('contact-form-modal');
 
-  const openModal = (e) => {
-    if (e) e.preventDefault();
-    if (!modal) return;
-    modal.classList.add('open');
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-  };
-  const closeModal = () => {
-    if (!modal) return;
-    modal.classList.remove('open');
-    document.body.style.overflow = '';
-    setTimeout(() => { modal.style.display = 'none'; }, 400);
-  };
+    // ----------------------------------------------------
+    // 2. 스크롤 시 요소 나타나기 애니메이션
+    // ----------------------------------------------------
+    const animateElements = document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in');
 
-  openBtns.forEach(btn => btn.addEventListener('click', openModal));
-  if (closeBtn) closeBtn.addEventListener('click', closeModal);
-  window.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeMobileMenu(); } });
+    const observerOptions = {
+        root: null, 
+        rootMargin: '0px',
+        threshold: 0.15 
+    };
 
-  if (modalForm) {
-    modalForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const data = Object.fromEntries(new FormData(this).entries());
-      console.log('=== 소개서 다운로드 문의 데이터 수집 ===', data);
-      alert(`[${data.name}] 문의가 접수되었습니다. 이메일(${data.email})로 소개서를 보내드립니다.`);
-      this.reset();
-      closeModal();
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                // 한 번 보이면 관찰을 중단하여 불필요한 연산을 막습니다.
+                observer.unobserve(entry.target); 
+            }
+        });
+    }, observerOptions);
+
+    animateElements.forEach(el => {
+        observer.observe(el);
     });
-  }
-
-  const pageForm = document.getElementById('contact-form-page');
-  if (pageForm) {
-    pageForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const data = Object.fromEntries(new FormData(this).entries());
-      console.log('=== 페이지 문의 데이터 수집 ===', data);
-      alert(`[${data.name}] 문의가 접수되었습니다. 신속히 연락드리겠습니다.`);
-      this.reset();
-    });
-  }
-
-  /* ---------- 5) 모바일 햄버거 생성/토글 ---------- */
-  let menuToggleBtn = document.querySelector('.menu-toggle-btn');
-  if (header && !menuToggleBtn) {
-    menuToggleBtn = document.createElement('button');
-    menuToggleBtn.className = 'menu-toggle-btn';
-    menuToggleBtn.type = 'button';
-    menuToggleBtn.setAttribute('aria-label', '메뉴 열기');
-    menuToggleBtn.setAttribute('aria-expanded', 'false');
-    menuToggleBtn.innerHTML = '&#9776;';
-
-    if (headerContainer) {
-      if (headerRight) headerContainer.insertBefore(menuToggleBtn, headerRight);
-      else headerContainer.appendChild(menuToggleBtn);
+    
+    // ----------------------------------------------------
+    // 3. 헤더 스크롤 시 스타일 변경
+    // ----------------------------------------------------
+    if (header) {
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 80) { 
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
     }
-  }
 
-  function openMobileMenu() {
-    if (!header) return;
-    header.classList.add('menu-open');
-    document.body.style.overflow = 'hidden';
-    menuToggleBtn?.setAttribute('aria-expanded', 'true');
-  }
-  function closeMobileMenu() {
-    if (!header) return;
-    header.classList.remove('menu-open');
-    document.body.style.overflow = '';
-    menuToggleBtn?.setAttribute('aria-expanded', 'false');
-    // 드롭다운 열림 초기화
-    nav?.querySelectorAll('.dropdown.active').forEach(x => x.classList.remove('active'));
-  }
-  function toggleMobileMenu() {
-    if (!header) return;
-    if (header.classList.contains('menu-open')) closeMobileMenu();
-    else openMobileMenu();
-  }
+    // ----------------------------------------------------
+    // 4. CONTACT 모달 기능 구현 (모든 페이지에 공통 적용)
+    // ----------------------------------------------------
+    const modal = document.getElementById('contact-modal');
+    const openBtns = document.querySelectorAll('[id^="open-contact-modal"]'); 
+    const closeBtn = document.querySelector('.modal .close-button'); 
+    const modalForm = document.getElementById('contact-form-modal'); 
 
-  if (menuToggleBtn) {
-    menuToggleBtn.addEventListener('click', toggleMobileMenu);
-  }
+    const openModal = (e) => {
+        if (e) e.preventDefault(); 
+        if (!modal) return;
+        modal.classList.add('open'); 
+        modal.style.display = 'flex'; 
+        document.body.style.overflow = 'hidden'; 
+    };
 
-  /* ---------- 6) 모바일 드롭다운 토글(위임) ---------- */
-  if (nav) {
-    nav.addEventListener('click', (e) => {
-      // 링크 클릭 시 모바일에서 메뉴 자동 닫기
-      const link = e.target.closest('.nav > a:not(.dropdown > a), .nav a.nav-item:not(.dropdown > a)');
-      if (link && window.innerWidth <= 1024 && !link.closest('.dropdown')) {
-        closeMobileMenu();
-        return; // 일반 링크는 진행
-      }
+    const closeModal = () => {
+        if (!modal) return;
+        modal.classList.remove('open');
+        document.body.style.overflow = ''; 
+        setTimeout(() => {
+             modal.style.display = 'none';
+        }, 400); 
+    };
 
-      if (window.innerWidth > 1024) return; // 데스크톱은 CSS :hover
-      const trigger = e.target.closest('.dropdown > a, .dropdown > button, .dropdown > .nav-item');
-      if (!trigger) return;
-
-      e.preventDefault();
-      const dd = trigger.closest('.dropdown');
-      if (!dd) return;
-
-      // 다른 드롭다운 닫기
-      nav.querySelectorAll('.dropdown.active').forEach(x => { if (x !== dd) x.classList.remove('active'); });
-      // 현재 토글
-      dd.classList.toggle('active');
-
-      const expanded = dd.classList.contains('active') ? 'true' : 'false';
-      trigger.setAttribute('aria-expanded', expanded);
+    openBtns.forEach(btn => {
+        btn.addEventListener('click', openModal);
     });
-  }
 
-  /* ---------- 7) 리사이즈 처리 ---------- */
-  let resizeTid = null;
-  const onResize = () => {
-    if (resizeTid) cancelAnimationFrame(resizeTid);
-    resizeTid = requestAnimationFrame(() => {
-      if (window.innerWidth > 1024) {
-        // 데스크톱 전환 시 모바일 상태 초기화
-        closeMobileMenu();
-      }
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    window.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
     });
-  };
-  window.addEventListener('resize', onResize);
 
+    // 모달 폼 제출 처리 (소개서 다운로드)
+    if (modalForm) {
+        modalForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            console.log("=== 소개서 다운로드 문의 데이터 수집 ===", data);
+            alert(`[${data.name} 고객님] 문의가 접수되었습니다. 확인 후 이메일(${data.email})로 서비스 소개서를 보내드리겠습니다.`);
+            this.reset(); 
+            closeModal(); 
+        });
+    }
+
+    // 5. Contact.html 페이지 폼 제출 처리
+    const pageForm = document.getElementById('contact-form-page');
+    if (pageForm) {
+        pageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            console.log("=== 페이지 문의 데이터 수집 ===", data);
+            alert(`[${data.name} 고객님] 문의가 접수되었습니다. 신속하게 연락드리겠습니다.`);
+            this.reset(); 
+        });
+    }
+
+    // ----------------------------------------------------
+    // 6. 모바일 메뉴 토글 기능 구현 (햄버거 버튼 오류 수정 완료)
+    // ----------------------------------------------------
+    
+    if (header) {
+        // HTML에 햄버거 버튼이 없으므로, JavaScript로 생성합니다.
+        let menuToggleBtn = document.querySelector('.menu-toggle-btn');
+        if (!menuToggleBtn) {
+            menuToggleBtn = document.createElement('button');
+            menuToggleBtn.classList.add('menu-toggle-btn');
+            menuToggleBtn.innerHTML = '&#9776;'; // 햄버거 아이콘
+            
+            const headerContainer = document.querySelector('.header .container');
+            if (headerContainer) {
+                // 로고와 CTA 사이에 배치하기 위해 .header-right 앞에 추가
+                const headerRight = document.querySelector('.header-right');
+                if (headerRight) {
+                    headerContainer.insertBefore(menuToggleBtn, headerRight);
+                } else {
+                    headerContainer.appendChild(menuToggleBtn);
+                }
+            }
+        }
+
+        // 햄버거 버튼 클릭 이벤트 처리: 전체 헤더에 menu-open 클래스 토글
+        if (menuToggleBtn) {
+            menuToggleBtn.addEventListener('click', () => {
+                header.classList.toggle('menu-open');
+                // 모바일 메뉴 열릴 때 body 스크롤 방지
+                if (header.classList.contains('menu-open')) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = '';
+                }
+            });
+        }
+    }
+
+
+    // 7. 드롭다운 메뉴 토글 (모바일에서 1차 메뉴 클릭 시 2차 메뉴 열기)
+    const dropdowns = document.querySelectorAll('.dropdown > a');
+
+    dropdowns.forEach(dropdownLink => {
+        // 1차 메뉴 링크 클릭 이벤트 처리
+        dropdownLink.addEventListener('click', (e) => {
+            // CSS에서 설정한 모바일 레이아웃 Breakpoint(1024px) 이하에서만 작동
+            if (window.innerWidth <= 1024) { 
+                const parentDropdown = dropdownLink.parentElement;
+
+                // 이미 활성화된 다른 드롭다운 닫기
+                document.querySelectorAll('.dropdown.active').forEach(activeDropdown => {
+                    if (activeDropdown !== parentDropdown) {
+                        activeDropdown.classList.remove('active');
+                    }
+                });
+                
+                // 현재 드롭다운 토글
+                e.preventDefault();
+                parentDropdown.classList.toggle('active');
+            }
+        });
+    });
 });
