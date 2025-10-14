@@ -164,7 +164,7 @@ export default function PackagesListClient(props: Props) {
                     )}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {parsed.basic.slice(0, 8).map((name, idx) => (
+                    {(parsed.basic ?? []).slice(0, 8).map((name: string, idx: number) => (
                         <span key={idx} className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] text-gray-700">
                             {name}
                         </span>
