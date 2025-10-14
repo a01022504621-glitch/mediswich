@@ -3,8 +3,8 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export const config = {
-  // API는 제외
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
+  // ✨ 최종 수정: API, 정적 파일, 그리고 '.'이 포함된 모든 파일(예: list.xlsx, a.png)을 미들웨어에서 제외합니다.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
 
 const ROOT = "mediswich.co.kr";
@@ -85,7 +85,7 @@ export function middleware(req: NextRequest) {
   if (isProd) res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
 
   // CSP 설정
-  const devScript = isProd ? [] : ["'unsafe-eval'"]; // ✨ 'unsafe-inline'은 아래에서 항상 포함하므로 여기서 제거
+  const devScript = isProd ? [] : ["'unsafe-eval'"];
   const devStyle = isProd ? [] : ["'unsafe-inline'"];
   const httpDaum = isProd ? [] : ["http://*.daumcdn.net", "http://*.daum.net"];
   
@@ -94,7 +94,7 @@ export function middleware(req: NextRequest) {
     // ✨ 운영 환경에서도 'unsafe-inline'을 허용하도록 수정
     `script-src ${["'self'", "'unsafe-inline'", "https://t1.daumcdn.net", "https://ssl.daumcdn.net", ...devScript].join(" ")}`,
     `style-src ${["'self'", ...devStyle].join(" ")}`,
-    `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", "https://images.unsplash.com", ...httpDaum].join(" ")}`, // ✨ unsplash.com 이미지 허용
+    `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", "https://images.unsplash.com", ...httpDaum].join(" ")}`,
     `font-src 'self' data:`,
     `connect-src ${["'self'", ...(isProd ? [] : ["ws:", "http://localhost:3000"])].join(" ")}`,
     `frame-src ${["'self'", "https://*.daum.net", "https://*.daumcdn.net", ...httpDaum].join(" ")}`,
