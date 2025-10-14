@@ -2,7 +2,7 @@
 import "server-only";
 
 export const COOKIE_NAME = process.env.COOKIE_NAME ?? "msw_m";
-export const SESSION_TTL_SEC = parseInt(process.env.SESSION_TTL_SEC ?? "3600", 10);
+export const SESSION_TTL_SEC = parseInt(process.env.SESSION_TTL_SEC ?? "28800", 10); // 8 hours
 
 const ENC = new TextEncoder();
 const DEC = new TextDecoder();
@@ -17,7 +17,6 @@ function b64urlDecode(s: string): Uint8Array {
   return new Uint8Array(Buffer.from(s + "=".repeat(pad), "base64"));
 }
 
-// Ensure ArrayBuffer (avoid SharedArrayBuffer typing issues)
 const toAB = (v: ArrayBuffer | ArrayBufferView): ArrayBuffer => {
   if (v instanceof ArrayBuffer) return v;
   const view = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
@@ -96,16 +95,18 @@ export async function signSession(payload: JwtPayload) {
 }
 
 export function sessionCookie(token: string, maxAgeSec = SESSION_TTL_SEC) {
-  const secure = process.env.NODE_ENV === "production";
+  const isProd = process.env.NODE_ENV === "production";
   return {
     name: COOKIE_NAME,
     value: token,
     options: {
       httpOnly: true,
-      secure,
+      secure: isProd,
       sameSite: "lax" as const,
       path: "/",
       maxAge: maxAgeSec,
+      // ✨ 1. domain: 운영 환경일 때 모든 서브도메인에서 쿠키를 공유하도록 설정
+      domain: isProd ? ".mediswich.co.kr" : undefined,
     },
   };
 }
@@ -113,16 +114,18 @@ export function sessionCookie(token: string, maxAgeSec = SESSION_TTL_SEC) {
 export function expCookie(expUnixSec: number) {
   const now = toSec(Date.now());
   const maxAge = Math.max(0, expUnixSec - now);
-  const secure = process.env.NODE_ENV === "production";
+  const isProd = process.env.NODE_ENV === "production";
   return {
     name: "msw_exp",
     value: String(expUnixSec),
     options: {
       httpOnly: false,
-      secure,
+      secure: isProd,
       sameSite: "lax" as const,
       path: "/",
       maxAge,
+      // ✨ 2. domain: 세션 쿠키와 동일하게 설정하여 일관성 유지
+      domain: isProd ? ".mediswich.co.kr" : undefined,
     },
   };
 }
@@ -137,7 +140,5 @@ export function readExp(token: string): number | undefined {
     return undefined;
   }
 }
-
-
 
 
