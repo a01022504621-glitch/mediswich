@@ -176,7 +176,7 @@ export default function PackagesListClient(props: Props) {
 
               {/* 선택검사 그룹 (정상 작동) */}
               <div className="px-5 pb-5 space-y-2">
-                {parsed.groups.map((g) => (
+                {parsed.groups.map((g: any) => (
                   <div key={g.id} className="rounded-xl ring-1 ring-slate-200 p-3 bg-white">
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-sm font-bold text-slate-800">{g.label}</div>
@@ -187,7 +187,7 @@ export default function PackagesListClient(props: Props) {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {g.items.map((name, idx) => (
+                      {g.items.map((name: string, idx: number) => (
                         <span key={`${g.id}_${idx}`} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700">
                           {name}
                         </span>
@@ -218,7 +218,7 @@ export default function PackagesListClient(props: Props) {
                   <button onClick={() => setShowBasic(false)} className="p-1 rounded-full text-slate-500 hover:bg-slate-100 transition"><XMark className="w-4 h-4" /></button>
                 </div>
                 <div className="px-5 py-4 space-y-2 max-h-[60vh] overflow-y-auto">
-                  {parsed.basic.map((n, i) => (
+                  {parsed.basic.map((n: string, i: number) => (
                     <div key={i} className="rounded-lg bg-gray-50 px-3 py-2 text-[14px] text-slate-700">{n}</div>
                   ))}
                 </div>
