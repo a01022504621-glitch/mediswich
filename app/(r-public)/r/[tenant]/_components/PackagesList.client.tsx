@@ -1,4 +1,3 @@
-// app/(r-public)/r/[tenant]/_components/PackagesList.client.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -7,62 +6,55 @@ import useSWR from "swr";
 import type { SVGProps } from "react";
 import type { CardPkg } from "./CatalogClient.client";
 
+// --- (이전과 동일한 타입 및 헬퍼 함수들) ---
 type Cat = "nhis" | "general" | "corp";
 type Props =
-  | { tenant: string; type: Cat }                         // LandingShell 용
-  | { packages: CardPkg[]; slug: string };                // CatalogClient 용
+  | { tenant: string; type: Cat }
+  | { packages: CardPkg[]; slug: string };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// 아이콘
-const ChevronRight = (props: SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-    <path
-      fillRule="evenodd"
-      d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-      clipRule="evenodd"
-    />
-  </svg>
-);
-const XMark = (props: SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-  </svg>
-);
+const ChevronRight = (props: SVGProps<SVGSVGElement>) => ( <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}> <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /> </svg> );
+const XMark = (props: SVGProps<SVGSVGElement>) => ( <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}> <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /> </svg> );
 
-// tags 파싱
-function toName(v: any): string {
-  if (!v) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "object") return v.name ?? v.title ?? v.examName ?? v.code ?? "";
-  return String(v);
-}
-function names(items: any): string[] {
-  const arr = Array.isArray(items) ? items : [];
-  return arr.map(toName).filter(Boolean);
-}
+// ✨ 1. 데이터를 올바르게 해석하는 새로운 `readGroups` 함수로 교체
+// ==================================================================
 function readGroups(tags: any) {
-  const g = tags?.groups ?? {};
-  const basic = names(g?.basic?.items ?? g?.base?.items ?? g?.general?.items ?? []);
-  const skip = new Set(["basic", "base", "general", "cancer"]);
-  const optionKeys = Object.keys(g).filter((k) => !skip.has(k));
-  const groups = optionKeys.map((k) => ({
-    id: k,
-    label: g[k]?.label ?? g[k]?.title ?? k,
-    chooseCount: Number(g[k]?.chooseCount) || 0,
-    items: names(g[k]?.items ?? []),
-  }));
-  return { basic, groups };
+    if (!tags || typeof tags !== 'object') {
+        return { basic: [], groups: [] };
+    }
+
+    const groupMeta = tags.groupMeta || {};
+    const groupsData = tags.groups || {};
+    const groupOrder = tags.groupOrder || Object.keys(groupsData);
+
+    const basicItems = (groupsData.base || []).map((item: any) => item.name || '').filter(Boolean);
+    
+    const optionalGroups = groupOrder
+        .filter((gid: string) => gid !== 'base' && groupMeta[gid])
+        .map((gid: string) => {
+            const meta = groupMeta[gid];
+            const items = (groupsData[gid] || []).map((item: any) => item.name || '').filter(Boolean);
+            return {
+                id: gid,
+                label: meta.label || `선택검사 ${gid.replace('opt_', '')}`,
+                chooseCount: Number(meta.chooseCount) || 0,
+                items: items,
+            };
+        });
+
+    return { basic: basicItems, groups: optionalGroups };
 }
+// ==================================================================
+
 
 export default function PackagesListClient(props: Props) {
-  // 두 모드 지원
+  // --- (컴포넌트 로직은 이전과 대부분 동일) ---
   const isFetchMode = (p: Props): p is { tenant: string; type: Cat } => "tenant" in p && "type" in p;
   const isDataMode = (p: Props): p is { packages: CardPkg[]; slug: string } => "packages" in p && "slug" in p;
 
   const router = useRouter();
 
-  // 데이터 준비
   let slug = "";
   let packages: CardPkg[] = [];
 
@@ -84,11 +76,10 @@ export default function PackagesListClient(props: Props) {
 
   const opened = useMemo(() => packages.find((p) => p.id === openId) ?? null, [openId, packages]);
   const parsed = useMemo(() => (opened ? readGroups(opened.tags) : null), [opened]);
-  const basicPreview = parsed?.basic ?? [];
 
   return (
     <>
-      {/* 목록 */}
+      {/* 목록 (수정 없음) */}
       <ul className="space-y-2">
         {packages.map((p) => (
           <li
@@ -114,10 +105,7 @@ export default function PackagesListClient(props: Props) {
                       <div className="mt-0.5 mb-2 text-[11px] font-medium text-slate-500">🗓️ {p.periodLabel}</div>
                     )}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenId(p.id);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setOpenId(p.id); }}
                       className="flex items-center rounded-lg bg-blue-500 text-white px-3 py-1 text-[13px] font-semibold hover:bg-blue-600 transition duration-150 shadow-sm"
                     >
                       자세히 보기
@@ -125,7 +113,6 @@ export default function PackagesListClient(props: Props) {
                     </button>
                   </div>
                 </div>
-
                 <div className="flex flex-wrap gap-1 pt-2 border-t border-slate-100">
                   <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
                     기본 {p.basicCount}개
@@ -142,15 +129,9 @@ export default function PackagesListClient(props: Props) {
         ))}
       </ul>
 
-      {/* 상세 모달 */}
-      {opened && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center"
-          onClick={() => {
-            setOpenId(null);
-            setShowBasic(false);
-          }}
-        >
+      {/* 상세 모달 (UI 로직 수정) */}
+      {opened && parsed && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center" onClick={() => { setOpenId(null); setShowBasic(false); }}>
           <div
             className="w-full max-w-xl rounded-t-3xl bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-bottom duration-300 sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
@@ -165,42 +146,37 @@ export default function PackagesListClient(props: Props) {
                   <div className="text-[13px] text-slate-500 mt-1">🗓️ 검진기간 {opened.periodLabel}</div>
                 )}
               </div>
-              <button
-                onClick={() => {
-                  setOpenId(null);
-                  setShowBasic(false);
-                }}
-                className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition"
-              >
+              <button onClick={() => { setOpenId(null); setShowBasic(false); }} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition">
                 <XMark className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="max-h[70vh] overflow-y-auto">
-              {/* 기본검사 요약 */}
+            <div className="max-h-[70vh] overflow-y-auto">
+              {/* ✨ 2. 기본검사 UI를 '뱃지' 형태로 수정 및 '전체보기' 기능 복원 */}
               <div className="px-5 pb-4">
                 <div className="rounded-xl ring-1 ring-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-slate-700">기본검사 항목 ({opened.basicCount}개)</div>
-                    {opened.basicCount > 10 && (
-                      <button
-                        onClick={() => setShowBasic(true)}
-                        className="text-[12px] font-medium text-blue-600 hover:text-blue-700 flex items-center"
-                      >
+                    <div className="text-sm font-semibold text-slate-700">기본검사 항목 ({parsed.basic.length}개)</div>
+                    {parsed.basic.length > 8 && ( // 뱃지 8개 이상일 때 전체보기 버튼 노출
+                      <button onClick={() => setShowBasic(true)} className="text-[12px] font-medium text-blue-600 hover:text-blue-700 flex items-center">
                         전체보기 <ChevronRight className="w-3 h-3 ml-0.5" />
                       </button>
                     )}
                   </div>
-                  <div className="mt-2 text-[13px] text-slate-700 line-clamp-2">
-                    {basicPreview.slice(0, 10).join(" · ")}
-                    {opened.basicCount > 10 && "..."}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {parsed.basic.slice(0, 8).map((name, idx) => (
+                        <span key={idx} className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] text-gray-700">
+                            {name}
+                        </span>
+                    ))}
+                    {parsed.basic.length > 8 && <span className="text-[11px] text-gray-500 self-center">...</span>}
                   </div>
                 </div>
               </div>
 
-              {/* 선택검사 그룹 */}
+              {/* 선택검사 그룹 (정상 작동) */}
               <div className="px-5 pb-5 space-y-2">
-                {(parsed?.groups ?? []).map((g) => (
+                {parsed.groups.map((g) => (
                   <div key={g.id} className="rounded-xl ring-1 ring-slate-200 p-3 bg-white">
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-sm font-bold text-slate-800">{g.label}</div>
@@ -212,10 +188,7 @@ export default function PackagesListClient(props: Props) {
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {g.items.map((name, idx) => (
-                        <span
-                          key={`${g.id}_${idx}_${name}`}
-                          className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
-                        >
+                        <span key={`${g.id}_${idx}`} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700">
                           {name}
                         </span>
                       ))}
@@ -225,7 +198,7 @@ export default function PackagesListClient(props: Props) {
               </div>
             </div>
 
-            {/* CTA */}
+            {/* CTA (수정 없음) */}
             <div className="p-5 border-t border-slate-100 sticky bottom-0 bg-white/95 backdrop-blur-sm">
               <button
                 onClick={() => router.push(`/r/${slug}/schedule?packageId=${opened.id}`)}
@@ -236,29 +209,17 @@ export default function PackagesListClient(props: Props) {
             </div>
           </div>
 
-          {/* 기본검사 전체보기 */}
+          {/* 기본검사 전체보기 모달 (정상 작동) */}
           {showBasic && (
-            <div
-              className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center p-3"
-              onClick={() => setShowBasic(false)}
-            >
-              <div
-                className="w-full max-w-[560px] rounded-xl bg-white shadow-xl ring-1 ring-slate-200 animate-in fade-in zoom-in-95 duration-200"
-                onClick={(e) => e.stopPropagation()}
-              >
+            <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center p-3" onClick={() => setShowBasic(false)}>
+              <div className="w-full max-w-[560px] rounded-xl bg-white shadow-xl ring-1 ring-slate-200 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                 <div className="px-5 pt-4 pb-2 flex items-center justify-between border-b border-slate-100">
-                  <div className="text-lg font-bold text-slate-800">
-                    기본검사 전체 ({(parsed?.basic ?? []).length}개)
-                  </div>
-                  <button onClick={() => setShowBasic(false)} className="p-1 rounded-full text-slate-500 hover:bg-slate-100 transition">
-                    <XMark className="w-4 h-4" />
-                  </button>
+                  <div className="text-lg font-bold text-slate-800">기본검사 전체 ({parsed.basic.length}개)</div>
+                  <button onClick={() => setShowBasic(false)} className="p-1 rounded-full text-slate-500 hover:bg-slate-100 transition"><XMark className="w-4 h-4" /></button>
                 </div>
                 <div className="px-5 py-4 space-y-2 max-h-[60vh] overflow-y-auto">
-                  {(parsed?.basic ?? []).map((n, i) => (
-                    <div key={i} className="rounded-lg bg-gray-50 px-3 py-2 text-[14px] text-slate-700">
-                      {n}
-                    </div>
+                  {parsed.basic.map((n, i) => (
+                    <div key={i} className="rounded-lg bg-gray-50 px-3 py-2 text-[14px] text-slate-700">{n}</div>
                   ))}
                 </div>
               </div>
@@ -269,4 +230,3 @@ export default function PackagesListClient(props: Props) {
     </>
   );
 }
-

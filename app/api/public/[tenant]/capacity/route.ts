@@ -21,6 +21,8 @@ const parseISO = (s: string) => {
   return new Date(+m[1], +m[2] - 1, +m[3]);
 };
 
+const etagOf = (json: string) => `W/"${createHash("sha1").update(json).digest("base64")}"`;
+
 // 리소스 키 정규화
 function normResKey(s: string): ResKey | null {
   const k = s.trim().toLowerCase();
@@ -74,7 +76,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       return NextResponse.json({ ok: false, error: "TENANT_NOT_FOUND" }, { status: 404, headers: { "cache-control": CC_PUBLIC } });
     }
 
-    // (A) month=YYYY-MM → 달력 맵 모드
+    // (A) month=YYYY-MM → 달력 맵
     if (monthParam && !fromStr && !toStr) {
       const y = Number(monthParam.slice(0, 4));
       const m = Number(monthParam.slice(5, 7)) - 1;
@@ -84,7 +86,6 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       const fromStart = new Date(y, m, 1, 0, 0, 0, 0);
       const toNextStart = new Date(y, m + 1, 1, 0, 0, 0, 0);
 
-      // 요일별 템플릿 → 일자 총 수용인원 합산
       const templates = await prisma.slotTemplate.findMany({
         where: { hospitalId: hosp.id },
         select: { dow: true, start: true, end: true, capacity: true },
@@ -108,14 +109,9 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
 
       const closedMap = await findClosedDates(hosp.id, fromStart, toNextStart);
 
-      // 일별 예약 건수 합
       const activeStatuses = ["PENDING", "RESERVED", "CONFIRMED"] as const;
       const bookings = await prisma.booking.findMany({
-        where: {
-          hospitalId: hosp.id,
-          date: { gte: fromStart, lt: toNextStart },
-          status: { in: activeStatuses as any },
-        },
+        where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart }, status: { in: activeStatuses as any } },
         select: { date: true },
       });
       const usedByDay = new Map<YMD, number>();
@@ -130,7 +126,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
         const key = toYMD(cur);
         const temps = slotsByDow[cur.getDay()] || [];
         const sumCap = temps.reduce((s, t) => s + t.cap, 0);
-        const cap = sumCap > 0 ? sumCap : 999; // 템플릿 없으면 오픈 처리
+        const cap = sumCap > 0 ? sumCap : 999; // 템플릿 없으면 OPEN 처리
         const used = usedByDay.get(key) || 0;
         const isClosed = closedMap.has(key);
         result[key] = isClosed ? "CLOSED" : used >= cap ? "FULL" : "OPEN";
@@ -138,7 +134,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       }
 
       const json = JSON.stringify(result);
-      const etag = `"W/${createHash("sha1").update(json).digest("base64")}"`;
+      const etag = etagOf(json);
       const inm = req.headers.get("if-none-match");
       if (inm && inm === etag) return new NextResponse(null, { status: 304, headers: { "cache-control": CC_PUBLIC, etag } });
       return new NextResponse(json, { status: 200, headers: { "content-type": "application/json; charset=utf-8", "cache-control": CC_PUBLIC, etag } });
@@ -147,8 +143,9 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
     // (B) 상세(from/to/resources)
     const fromDate = parseISO(fromStr);
     const toDate = parseISO(toStr);
-    if (!fromDate || !toDate) return NextResponse.json({ ok: false, error: "INVALID_RANGE" }, { status: 400, headers: { "cache-control": "no-store" } });
-    if (toDate < fromDate) return NextResponse.json({ ok: false, error: "INVALID_RANGE" }, { status: 400, headers: { "cache-control": "no-store" } });
+    if (!fromDate || !toDate || toDate < fromDate) {
+      return NextResponse.json({ ok: false, error: "INVALID_RANGE" }, { status: 400, headers: { "cache-control": "no-store" } });
+    }
 
     const reqKeysRaw = (resourcesParam ? resourcesParam.split(",") : []).map((s) => s.trim());
     const reqKeysNorm = Array.from(new Set(reqKeysRaw.map(normResKey).filter((x): x is ResKey => !!x)));
@@ -182,17 +179,11 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
 
     const activeStatuses = ["PENDING", "RESERVED", "CONFIRMED"] as const;
     const bookings = await prisma.booking.findMany({
-      where: {
-        hospitalId: hosp.id,
-        date: { gte: fromStart, lt: toNextStart },
-        status: { in: activeStatuses as any },
-      },
+      where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart }, status: { in: activeStatuses as any } },
       select: { date: true },
     });
     const usedByDay = new Map<YMD, number>();
-    for (const b of bookings) {
-      usedByDay.set(toYMD(b.date), (usedByDay.get(toYMD(b.date)) || 0) + 1);
-    }
+    for (const b of bookings) usedByDay.set(toYMD(b.date), (usedByDay.get(toYMD(b.date)) || 0) + 1);
 
     const days: Record<YMD, Partial<Record<string, { cap: number; used: number; closed?: boolean }>>> = {};
     let cur = new Date(fromStart);
@@ -216,14 +207,11 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
 
     const body = { ok: true, days };
     const json = JSON.stringify(body);
-    const etag = `"W/${createHash("sha1").update(json).digest("base64")}"`;
+    const etag = etagOf(json);
     const inm = req.headers.get("if-none-match");
     if (inm && inm === etag) return new NextResponse(null, { status: 304, headers: { "cache-control": CC_PUBLIC, etag } });
 
-    return new NextResponse(json, {
-      status: 200,
-      headers: { "content-type": "application/json; charset=utf-8", "cache-control": CC_PUBLIC, etag },
-    });
+    return new NextResponse(json, { status: 200, headers: { "content-type": "application/json; charset=utf-8", "cache-control": CC_PUBLIC, etag } });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500, headers: { "cache-control": "no-store" } });

@@ -1,4 +1,3 @@
-// app/(r-public)/r/[tenant]/schedule/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -186,7 +185,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
 
   useEffect(() => {
     if (stepKey !== "date") return;
-    fetchSlots(params.tenant, ymdKey(form.date)).then(setSlots).catch(() => setSlots(generateSlots()));
+    fetchSlots(params.tenant, ymdKey(form.date)).then(setSlots);
   }, [stepKey, params.tenant, form.date]);
 
   function setBirthMasked(v: string) {
@@ -539,7 +538,7 @@ function StepInfo({
             <input value={form.postal} readOnly className={inputClass} placeholder={t("우편번호", "Postal code")} />
             <button type="button" className="px-3 rounded-xl border border-slate-200 inline-flex items-center gap-1.5 hover:bg-slate-50" onClick={openPostcode(setForm)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-slate-600">
-                <path d="M11 19a8 8 0 1 1 5.292-14.01A8 8 0 0 1 11 19Zm10 2-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M11 19a 8 8 0 1 1 5.292-14.01A8 8 0 0 1 11 19Zm10 2-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
               <span className="text-sm">{t("주소검색", "Search")}</span>
             </button>
@@ -963,15 +962,35 @@ async function fetchCapacityMonth(tenant: string, ym: string): Promise<CapacityM
   return out;
 }
 async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
-  // 엔드포인트 정정: /timeslots 사용, 상태는 available로 유도
-  const res = await fetch(`/api/public/${tenant}/timeslots?date=${ymd}`, { cache: "no-store", headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error("slots error");
-  const j = await res.json();
-  const arr: any[] = Array.isArray(j?.slots) ? j.slots : Array.isArray(j) ? j : [];
-  return arr.map((s) => ({
-    time: s.time,
-    status: s.status ? normSlotStatus(s.status) : s.available ? ("OPEN" as const) : ("FULL" as const),
-  }));
+  // 1) /timeslots 2) /slots 3) /capacity(date) → 실패 시 기본 07:00~10:00 30분
+  const urls = [
+    `/api/public/${tenant}/timeslots?date=${ymd}`,
+    `/api/public/${tenant}/slots?date=${ymd}`,
+    `/api/public/${tenant}/capacity?date=${ymd}`,
+  ];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { cache: "no-store", headers: { accept: "application/json" } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const raw: any[] =
+        Array.isArray(j?.slots) ? j.slots :
+        Array.isArray(j?.times) ? j.times :
+        Array.isArray(j) ? j : [];
+      const mapped: Slot[] = raw
+        .map((s: any) => {
+          const time = s?.time || s?.hhmm || s?.start || (typeof s === "string" ? s : "");
+          const status: Slot["status"] = s?.status ? normSlotStatus(s.status) : (s?.available === false ? "FULL" : "OPEN");
+          return { time, status };
+        })
+        .filter((x) => typeof x.time === "string" && /^\d{2}:\d{2}$/.test(x.time));
+      if (mapped.length > 0) {
+        mapped.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+        return mapped;
+      }
+    } catch {}
+  }
+  return generateSlots();
 }
 function generateSlots(): Slot[] {
   const out: Slot[] = [];
@@ -991,6 +1010,22 @@ async function createBooking(payload: any): Promise<boolean> {
   }
 }
 function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayload | null, form: any) {
+  // 그룹별 선택 스냅샷
+  const groupsSnap = (pkg?.optionGroups || []).map((g, gi) => {
+    const gid = groupIdOf(g, gi);
+    const picked = new Set(form?.examSelected?.[gid] || []);
+    const selected = (g.items || [])
+      .map((it, xi) => ({ key: itemKeyFrom(it, xi), name: it?.name || "", code: it?.code || it?.examId || it?.id || "" }))
+      .filter((x) => picked.has(x.key))
+      .map((x) => ({ name: x.name, code: x.code }));
+    return { id: gid, label: g?.label || "", selected };
+  });
+  const labelJoin = (rx: RegExp) => groupsSnap.find((g) => rx.test(g.label))?.selected.map((s) => s.name).filter(Boolean).join(",") || "";
+  const selectedA = labelJoin(/A/i);
+  const selectedB = labelJoin(/B/i);
+  const examCodes = groupsSnap.flatMap((g) => g.selected.map((s) => s.code).filter(Boolean)).join(",");
+  const coPayKRW = Number(pkg?.price) || 0;
+
   return {
     tenant,
     packageId,
@@ -1005,10 +1040,13 @@ function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayl
     disease: form.disease,
     address: { postal: form.postal, address1: form.address1, address2: form.address2 },
     exams: { basic: pkg?.basicExams || [], optional: form.examSelected || {} },
+    examSnapshot: { groups: groupsSnap, selectedA, selectedB, examCodes },
+    coPayKRW,
     datetime: `${ymdKey(form.date)} ${form.time}`,
-    status: "REQUESTED",
+    status: "PENDING",
     survey: form.survey || {},
   };
 }
+
 
 

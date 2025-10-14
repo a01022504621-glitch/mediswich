@@ -1,4 +1,3 @@
-// app/api/public/[tenant]/booking/route.ts
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +13,6 @@ const toYMD = (d: Date): YMD =>
   ).padStart(2, "0")}` as YMD;
 
 const parseYMD_HHMM = (s: string) => {
-  // "YYYY-MM-DD HH:MM"
   const m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/.exec(String(s || "").trim());
   if (!m) return null;
   const d = new Date(+m[1], +m[2] - 1, +m[3], 0, 0, 0, 0);
@@ -69,13 +67,13 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
       phone,
       birth,
       sex,
-      datetime, // "YYYY-MM-DD HH:MM"
+      datetime,
       email,
       address,
       foreigner,
       exams,
       survey,
-      status, // may be "REQUESTED" from FE
+      status,
     } = body || {};
 
     if (!packageId || !name || !phone || !datetime) {
@@ -100,13 +98,11 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
     const dayStart = new Date(dt.date.getFullYear(), dt.date.getMonth(), dt.date.getDate(), 0, 0, 0, 0);
     const nextStart = new Date(dt.date.getFullYear(), dt.date.getMonth(), dt.date.getDate() + 1, 0, 0, 0, 0);
 
-    // day closed?
     const closedMap = await findClosedDates(hosp.id, dayStart, nextStart);
     if (closedMap.has(toYMD(dayStart))) {
       return NextResponse.json({ error: "closed", code: "CLOSED" }, { status: 409 });
     }
 
-    // load slot templates for DOW
     const dow = dayStart.getDay();
     const templates = await prisma.slotTemplate.findMany({
       where: { hospitalId: hosp.id, dow },
@@ -114,17 +110,13 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
       orderBy: { start: "asc" },
     });
 
-    // compute capacity for requested HH:MM
     const within = (hhmm: string, start: string, end: string) => start <= hhmm && hhmm <= end;
     let capForSlot = 0;
     for (const t of templates) {
-      if (within(dt.hhmm, t.start, t.end)) {
-        capForSlot = Math.max(capForSlot, t.capacity || 0);
-      }
+      if (within(dt.hhmm, t.start, t.end)) capForSlot = Math.max(capForSlot, t.capacity || 0);
     }
-    if (capForSlot === 0) capForSlot = 999; // default open window when no template
+    if (capForSlot === 0) capForSlot = 999;
 
-    // used count for exact HH:MM
     const activeStatuses = ["PENDING", "RESERVED", "CONFIRMED"] as const;
     const used = await prisma.booking.count({
       where: {
@@ -138,11 +130,9 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
       return NextResponse.json({ error: "full", code: "FULL" }, { status: 409 });
     }
 
-    // normalize fields
     const phoneDigits = String(phone).replace(/\D/g, "");
     const sexEnum = inferSex(sex);
 
-    // persist
     const created = await prisma.booking.create({
       data: {
         hospitalId: hosp.id,
@@ -153,10 +143,9 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
         phone: String(phone),
         phoneNormalized: phoneDigits || null,
         patientBirth: birth ? String(birth) : null,
-        sex: sexEnum as any, // enum Sex
+        sex: sexEnum as any,
         status: ((): any => {
           const s = String(status || "").toUpperCase();
-          // FE may send "REQUESTED". Map to "PENDING".
           if (s === "REQUESTED") return "PENDING";
           if (["PENDING", "RESERVED", "CONFIRMED"].includes(s)) return s;
           return "PENDING";
@@ -179,3 +168,4 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
+
