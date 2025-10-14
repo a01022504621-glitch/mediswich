@@ -84,15 +84,17 @@ export function middleware(req: NextRequest) {
   res.headers.set("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   if (isProd) res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
 
-  // 개발 편의 CSP
-  const devScript = isProd ? [] : ["'unsafe-eval'", "'unsafe-inline'"];
+  // CSP 설정
+  const devScript = isProd ? [] : ["'unsafe-eval'"]; // ✨ 'unsafe-inline'은 아래에서 항상 포함하므로 여기서 제거
   const devStyle = isProd ? [] : ["'unsafe-inline'"];
   const httpDaum = isProd ? [] : ["http://*.daumcdn.net", "http://*.daum.net"];
+  
   const csp = [
     "default-src 'self'",
-    `script-src ${["'self'", "https://t1.daumcdn.net", "https://ssl.daumcdn.net", ...devScript].join(" ")}`,
+    // ✨ 운영 환경에서도 'unsafe-inline'을 허용하도록 수정
+    `script-src ${["'self'", "'unsafe-inline'", "https://t1.daumcdn.net", "https://ssl.daumcdn.net", ...devScript].join(" ")}`,
     `style-src ${["'self'", ...devStyle].join(" ")}`,
-    `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", ...httpDaum].join(" ")}`,
+    `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", "https://images.unsplash.com", ...httpDaum].join(" ")}`, // ✨ unsplash.com 이미지 허용
     `font-src 'self' data:`,
     `connect-src ${["'self'", ...(isProd ? [] : ["ws:", "http://localhost:3000"])].join(" ")}`,
     `frame-src ${["'self'", "https://*.daum.net", "https://*.daumcdn.net", ...httpDaum].join(" ")}`,
@@ -109,4 +111,3 @@ export function middleware(req: NextRequest) {
 
   return res;
 }
-
