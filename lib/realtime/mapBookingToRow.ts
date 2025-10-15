@@ -82,24 +82,33 @@ export function mapBookingToRow(r: DBBooking): RowKR {
   const m: any = r.meta || {};
   const status = mapStatusKR(r.status);
 
-  const groups = Array.isArray(m?.examSnapshot?.groups) ? m.examSnapshot.groups : [];
-  const selected = groups.flatMap((g: any) => (Array.isArray(g?.selected) ? g.selected : []));
+  // 선택 스냅샷
+  const groups: any[] = Array.isArray(m?.examSnapshot?.groups) ? m.examSnapshot.groups : [];
+  const selected: any[] = groups.flatMap((g: any) => (Array.isArray(g?.selected) ? g.selected : []));
 
-  const fromMetaCodes =
+  // meta.examCodes 우선 사용하되, 패턴 미일치 제거
+  const fromMetaCodes: string[] =
     typeof m?.examCodes === "string"
-      ? m.examCodes.split(/[,\s]+/).map((s: string) => s.trim()).filter(isValidExamCode)
+      ? m.examCodes
+          .split(/[,\s]+/)
+          .map((s: string) => s.trim())
+          .filter(isValidExamCode)
       : [];
-  const fallbackCodes = selected.map((x: any) => x?.code).filter(isValidExamCode);
-  const codes = (fromMetaCodes.length ? fromMetaCodes : fallbackCodes)
-    .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i)
+
+  const fallbackCodes: string[] = selected
+    .map((x: any) => x?.code)
+    .filter(isValidExamCode);
+
+  const codes: string = (fromMetaCodes.length ? fromMetaCodes : fallbackCodes)
+    .filter((v: string) => !!v)
+    .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
     .join(",");
 
   const supportKRW = Number(m?.companySupportKRW ?? 0) || 0;
   const coPayKRW = Number(m?.coPayKRW ?? 0) || 0;
 
-  const confirmedDate = isYMD(m?.confirmedDate) ? String(m.confirmedDate) : undefined;
-  const completedDate = isYMD(m?.completedDate) ? String(m.completedDate) : undefined;
+  const confirmedDate: string | undefined = isYMD(m?.confirmedDate) ? String(m.confirmedDate) : undefined;
+  const completedDate: string | undefined = isYMD(m?.completedDate) ? String(m.completedDate) : undefined;
 
   return {
     id: r.id,
@@ -132,22 +141,28 @@ export function mapBookingToRow(r: DBBooking): RowKR {
 /** 엑셀용 필드 */
 export function extractExcelFields(b: DBBooking) {
   const m: any = b.meta || {};
-  const groups = m?.examSnapshot?.groups ?? [];
-  const items = Array.isArray(groups) ? groups.flatMap((g: any) => (Array.isArray(g?.selected) ? g.selected : [])) : [];
+  const groups: any[] = m?.examSnapshot?.groups ?? [];
+  const items: any[] = Array.isArray(groups)
+    ? groups.flatMap((g: any) => (Array.isArray(g?.selected) ? g.selected : []))
+    : [];
 
-  const selectedExams = items.map((x: any) => x?.name).filter(Boolean).join(", ");
+  const selectedExams: string = items.map((x: any) => x?.name).filter(Boolean).join(", ");
 
-  const fromMetaCodes =
+  const fromMetaCodes: string[] =
     typeof m?.examCodes === "string"
-      ? m.examCodes.split(/[,\s]+/).map((s: string) => s.trim()).filter(isValidExamCode)
+      ? m.examCodes
+          .split(/[,\s]+/)
+          .map((s: string) => s.trim())
+          .filter(isValidExamCode)
       : [];
-  const fallbackCodes = items.map((x: any) => x?.code).filter(isValidExamCode);
-  const examCodes = (fromMetaCodes.length ? fromMetaCodes : fallbackCodes)
-    .filter((v, i, a) => a.indexOf(v) === i)
+  const fallbackCodes: string[] = items.map((x: any) => x?.code).filter(isValidExamCode);
+
+  const examCodes: string = (fromMetaCodes.length ? fromMetaCodes : fallbackCodes)
+    .filter((v: string) => !!v)
+    .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
     .join(", ");
 
   const examType = m?.examType || categoryToLabel(b?.package?.category);
-
   const toYMD = (d: Date | null | undefined) => (d ? toYMDLocal(new Date(d)) : "");
 
   return {
