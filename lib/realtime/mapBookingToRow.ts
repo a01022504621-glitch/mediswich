@@ -1,4 +1,4 @@
-// 경로: mediswich/lib/realtime/mapBookingToRow.ts
+// mediswich/lib/realtime/mapBookingToRow.ts
 export type DBBooking = {
   id: string;
   name: string;
@@ -14,7 +14,7 @@ export type DBBooking = {
 
 type YMD = `${number}-${number}-${number}`;
 
-/** 로컬 타임존 기준 YYYY-MM-DD */
+/** 로컬 YYYY-MM-DD */
 const toYMDLocal = (d: Date): YMD => {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return z.toISOString().slice(0, 10) as YMD;
@@ -62,6 +62,7 @@ export type RowKR = {
   주소?: string;
   예약희망일: string;
   예약확정일?: string;
+  검진완료일?: string;
   예약상태: "예약신청" | "예약확정" | "검진완료" | "취소" | "검진미실시";
   패키지타입: string;
   선택검사A?: string;
@@ -81,26 +82,24 @@ export function mapBookingToRow(r: DBBooking): RowKR {
   const m: any = r.meta || {};
   const status = mapStatusKR(r.status);
 
-  // 선택 스냅샷
   const groups = Array.isArray(m?.examSnapshot?.groups) ? m.examSnapshot.groups : [];
-  const selected = groups.flatMap((g: any) => Array.isArray(g?.selected) ? g.selected : []);
+  const selected = groups.flatMap((g: any) => (Array.isArray(g?.selected) ? g.selected : []));
 
-  // meta.examCodes 우선 사용하되, 패턴 미일치 제거
-  const fromMetaCodes = typeof m?.examCodes === "string"
-    ? m.examCodes.split(/[,\s]+/).map((s: string) => s.trim()).filter(isValidExamCode)
-    : [];
-
+  const fromMetaCodes =
+    typeof m?.examCodes === "string"
+      ? m.examCodes.split(/[,\s]+/).map((s: string) => s.trim()).filter(isValidExamCode)
+      : [];
   const fallbackCodes = selected.map((x: any) => x?.code).filter(isValidExamCode);
-
   const codes = (fromMetaCodes.length ? fromMetaCodes : fallbackCodes)
     .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i) // dedup
+    .filter((v, i, a) => a.indexOf(v) === i)
     .join(",");
 
   const supportKRW = Number(m?.companySupportKRW ?? 0) || 0;
   const coPayKRW = Number(m?.coPayKRW ?? 0) || 0;
 
   const confirmedDate = isYMD(m?.confirmedDate) ? String(m.confirmedDate) : undefined;
+  const completedDate = isYMD(m?.completedDate) ? String(m.completedDate) : undefined;
 
   return {
     id: r.id,
@@ -113,6 +112,7 @@ export function mapBookingToRow(r: DBBooking): RowKR {
     주소: m?.address ? `(${m.address.postal || ""}) ${m.address.address1 || ""} ${m.address.address2 || ""}`.trim() : "",
     예약희망일: toYMDLocal(new Date(r.date)),
     예약확정일: confirmedDate,
+    검진완료일: completedDate,
     예약상태: status,
     패키지타입: m?.packageName || r.package?.title || "",
     선택검사A: m?.examSnapshot?.selectedA || "",
@@ -133,19 +133,22 @@ export function mapBookingToRow(r: DBBooking): RowKR {
 export function extractExcelFields(b: DBBooking) {
   const m: any = b.meta || {};
   const groups = m?.examSnapshot?.groups ?? [];
-  const items = Array.isArray(groups) ? groups.flatMap((g: any) => Array.isArray(g?.selected) ? g.selected : []) : [];
+  const items = Array.isArray(groups) ? groups.flatMap((g: any) => (Array.isArray(g?.selected) ? g.selected : [])) : [];
 
   const selectedExams = items.map((x: any) => x?.name).filter(Boolean).join(", ");
 
-  const fromMetaCodes = typeof m?.examCodes === "string"
-    ? m.examCodes.split(/[,\s]+/).map((s: string) => s.trim()).filter(isValidExamCode)
-    : [];
+  const fromMetaCodes =
+    typeof m?.examCodes === "string"
+      ? m.examCodes.split(/[,\s]+/).map((s: string) => s.trim()).filter(isValidExamCode)
+      : [];
   const fallbackCodes = items.map((x: any) => x?.code).filter(isValidExamCode);
   const examCodes = (fromMetaCodes.length ? fromMetaCodes : fallbackCodes)
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(", ");
 
   const examType = m?.examType || categoryToLabel(b?.package?.category);
+
+  const toYMD = (d: Date | null | undefined) => (d ? toYMDLocal(new Date(d)) : "");
 
   return {
     examType,
@@ -174,8 +177,13 @@ export function extractExcelFields(b: DBBooking) {
     surgery: m?.survey?.procedureHistory || "",
     dental: m?.survey?.teethStatus || "",
     flightPlan: m?.survey?.flightPlan2weeks || "",
+    requestedAt: toYMD(b.createdAt),
+    confirmedAt: isYMD(m?.confirmedDate) ? String(m.confirmedDate) : "",
+    completedAt: isYMD(m?.completedDate) ? String(m.completedDate) : "",
   };
 }
+
+
 
 
 

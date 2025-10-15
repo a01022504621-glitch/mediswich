@@ -1,4 +1,4 @@
-// app/api/m/realtime/batch-status/route.ts
+// mediswich/app/api/m/realtime/batch-status/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -7,9 +7,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOrg } from "@/lib/auth";
 
+/** YYYY-MM-DD 검사 */
+function isYMD(x: unknown): x is string {
+  return typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
+}
+
 /** KR/EN → DB BookingStatus 매핑 */
-function mapStatus(input: string) {
+function mapStatus(input?: string | null) {
   const s = String(input || "").trim().toUpperCase();
+  if (["PENDING", "RESERVED", "CONFIRMED", "COMPLETED", "CANCELED", "NO_SHOW"].includes(s)) return s;
+  if (s === "RESERVE") return "RESERVED";
   const KR: Record<string, string> = {
     "예약신청": "PENDING",
     "예약확정": "CONFIRMED",
@@ -17,91 +24,138 @@ function mapStatus(input: string) {
     "취소": "CANCELED",
     "검진미실시": "NO_SHOW",
   };
-  if (KR[s]) return KR[s];
-  if (["PENDING", "RESERVED", "CONFIRMED", "COMPLETED", "CANCELED", "NO_SHOW"].includes(s)) return s;
-  if (s === "RESERVE") return "RESERVED";
-  return null;
+  return KR[s] || null;
 }
 
-function isYMD(x: unknown): x is string {
-  return typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
-}
+type UpdateIn = { id: string; status?: string; confirmedDate?: string | null; completedDate?: string | null };
 
 export async function POST(req: NextRequest) {
   try {
-    const org = await requireOrg(); // 병원 스코프
+    const org = await requireOrg();
+
     const body = await req.json();
-    const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter(Boolean) : [];
-    const statusRaw: string = body?.status;
-    const confirmedDate: string | undefined = body?.confirmedDate;
+    const updates: UpdateIn[] = Array.isArray(body?.updates) ? body.updates : [];
+    if (!updates.length) return NextResponse.json({ error: "updates required" }, { status: 400 });
 
-    if (ids.length === 0) {
-      return NextResponse.json({ error: "ids required" }, { status: 400 });
-    }
-    const dbStatus = mapStatus(statusRaw);
-    if (!dbStatus) {
-      return NextResponse.json({ error: "invalid status" }, { status: 400 });
-    }
-    if (dbStatus === "CONFIRMED" && !isYMD(confirmedDate)) {
-      return NextResponse.json({ error: "confirmedDate must be YYYY-MM-DD for CONFIRMED" }, { status: 400 });
-    }
+    // id 중복 제거(마지막 지시 우선)
+    const lastById = new Map<string, UpdateIn>();
+    for (const u of updates) if (u?.id) lastById.set(u.id, u);
+    const ids = [...lastById.keys()];
 
-    // 대상 예약 로드(병원 소속만)
+    // 대상 로드
     const bookings = await prisma.booking.findMany({
       where: { hospitalId: org.id, id: { in: ids } },
-      select: { id: true, meta: true },
+      select: { id: true, status: true, meta: true },
     });
-    if (bookings.length === 0) {
-      return NextResponse.json({ error: "no matching bookings" }, { status: 404 });
+    const byId = new Map(bookings.map(b => [b.id, b]));
+
+    const tx: any[] = [];
+
+    // 스킵 사유 집계(프론트 안내용)
+    const skipped = {
+      notFound: [] as string[],
+      alreadyConfirmed: [] as string[],
+      alreadyCompleted: [] as string[],
+      needConfirmedForCompleted: [] as string[],
+      invalidConfirmedDate: [] as string[],
+      invalidCompletedDate: [] as string[],
+    };
+
+    for (const [id, u] of lastById) {
+      const cur = byId.get(id);
+      if (!cur) {
+        skipped.notFound.push(id);
+        continue;
+      }
+
+      const next = mapStatus(u.status);
+      if (!next) continue; // 알 수 없는 상태는 무시
+
+      const meta = { ...(cur.meta as any) };
+
+      if (next === "CONFIRMED") {
+        if (cur.status === "CONFIRMED" || cur.status === "COMPLETED") {
+          skipped.alreadyConfirmed.push(id);
+          continue;
+        }
+        if (!isYMD(u.confirmedDate)) {
+          skipped.invalidConfirmedDate.push(id);
+          continue;
+        }
+        meta.confirmedDate = u.confirmedDate;
+        delete meta.completedDate;
+
+        tx.push(
+          prisma.booking.update({
+            where: { id },
+            data: { status: "CONFIRMED" as any, meta },
+            select: { id: true },
+          }),
+        );
+      } else if (next === "COMPLETED") {
+        if (cur.status === "COMPLETED") {
+          skipped.alreadyCompleted.push(id);
+          continue;
+        }
+        if (!isYMD(u.completedDate)) {
+          skipped.invalidCompletedDate.push(id);
+          continue;
+        }
+        if (!meta?.confirmedDate) {
+          skipped.needConfirmedForCompleted.push(id);
+          continue;
+        }
+        meta.completedDate = u.completedDate;
+
+        tx.push(
+          prisma.booking.update({
+            where: { id },
+            data: { status: "COMPLETED" as any, meta },
+            select: { id: true },
+          }),
+        );
+      } else {
+        // 다른 상태로 변경 시 날짜 초기화
+        delete meta.confirmedDate;
+        delete meta.completedDate;
+
+        tx.push(
+          prisma.booking.update({
+            where: { id },
+            data: { status: next as any, meta },
+            select: { id: true },
+          }),
+        );
+      }
     }
 
-    // 개별 업데이트(메타 머지)
-    const tx = bookings.map((b) => {
-      const meta = { ...(b.meta as any) };
-      if (dbStatus === "CONFIRMED") {
-        meta.confirmedDate = confirmedDate; // YYYY-MM-DD
-      } else {
-        // 확정 해제/다른 상태로 변경 시 confirmedDate 제거
-        if (meta && typeof meta === "object") delete meta.confirmedDate;
-      }
-      return prisma.booking.update({
-        where: { id: b.id },
-        data: { status: dbStatus as any, meta },
-        select: { id: true },
-      });
-    });
+    if (!tx.length) {
+      return NextResponse.json({ ok: true, updated: 0, skipped });
+    }
 
     const updated = await prisma.$transaction(tx);
 
-    // 감사 로그(선택)
+    // 감사 로그
     try {
-      await prisma.auditLog.createMany({
-        data: updated.map((u) => ({
+      await prisma.auditLog.create({
+        data: {
           hospitalId: org.id,
           action: "BOOKING_BATCH_STATUS",
-          meta: {
-            ids: ids,
-            status: dbStatus,
-            confirmedDate: dbStatus === "CONFIRMED" ? confirmedDate : null,
-            updated: updated.map((x) => x.id),
-          } as any,
-        })),
-        skipDuplicates: true,
+          meta: { input: updates, updated: updated.map(x => x.id), skipped } as any,
+        },
       });
-    } catch {
-      // 로그 실패는 무시
-    }
+    } catch {}
 
     return NextResponse.json({
       ok: true,
       updated: updated.length,
-      status: dbStatus,
-      confirmedDate: dbStatus === "CONFIRMED" ? confirmedDate : undefined,
-      ids: updated.map((x) => x.id),
+      updatedIds: updated.map(x => x.id),
+      skipped,
     });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
+
 
 

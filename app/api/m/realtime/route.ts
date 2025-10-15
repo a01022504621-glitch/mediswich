@@ -1,4 +1,4 @@
-// 경로: mediswich/app/api/m/realtime/route.ts
+// mediswich/app/api/m/realtime/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,11 +8,14 @@ import { prisma } from "@/lib/prisma";
 import { requireOrg } from "@/lib/auth";
 import { mapBookingToRow, type DBBooking } from "@/lib/realtime/mapBookingToRow";
 
-/** UTC 기준 YYYY-MM-DD */
+/** UTC YYYY-MM-DD */
 const toYMDUTC = (d: Date) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
     d.getUTCDate()
   ).padStart(2, "0")}`;
+
+const isYMD = (s?: unknown): s is string =>
+  typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(String(s));
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,15 +27,49 @@ export async function GET(req: NextRequest) {
     const org = await requireOrg();
     const hospitalId = org.id;
 
-    // 기간 계산: [fromDate, toDate)
+    // 기간: [fromDate, toDate)
     const fromDate = from ? new Date(from) : new Date(Date.UTC(year, 0, 1));
     const rawTo = to ? new Date(to) : new Date(Date.UTC(year + 1, 0, 1));
     const toDate = to
       ? new Date(Date.UTC(rawTo.getUTCFullYear(), rawTo.getUTCMonth(), rawTo.getUTCDate() + 1))
       : rawTo;
 
+    // 자동 NO_SHOW 처리: 확정일 지남 + 미완료
+    const today = toYMDUTC(new Date());
+    try {
+      const candidates = await prisma.booking.findMany({
+        where: {
+          hospitalId,
+          OR: [{ status: "PENDING" }, { status: "RESERVED" }, { status: "CONFIRMED" }],
+        },
+        select: { id: true, meta: true },
+      });
+      const overdue = candidates
+        .filter((b) => isYMD((b.meta as any)?.confirmedDate))
+        .filter((b) => ((b.meta as any).confirmedDate as string) < today);
+      if (overdue.length) {
+        await prisma.$transaction(
+          overdue.map((b) =>
+            prisma.booking.update({
+              where: { id: b.id },
+              data: { status: "NO_SHOW" as any },
+              select: { id: true },
+            }),
+          ),
+        );
+      }
+    } catch {}
+
+    // 조회구분에 따라 프론트가 추가 필터를 하므로
+    // 서버는 "예약희망일(date)" 또는 "예약신청일(createdAt)" 둘 중 하나라도 기간에 걸리면 포함
     const rows = await prisma.booking.findMany({
-      where: { hospitalId, date: { gte: fromDate, lt: toDate } },
+      where: {
+        hospitalId,
+        OR: [
+          { date: { gte: fromDate, lt: toDate } },
+          { createdAt: { gte: fromDate, lt: toDate } },
+        ],
+      },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
@@ -44,21 +81,22 @@ export async function GET(req: NextRequest) {
         status: true,
         createdAt: true,
         meta: true,
-        package: { select: { title: true } },
+        package: { select: { title: true, category: true } },
       },
     });
 
-    // 타입 캐스팅 후 공용 매퍼 사용
     const items = (rows as unknown as DBBooking[]).map(mapBookingToRow);
 
-    // 헤더의 요약용 totalAll 참고를 위해 총합 같이 리턴
-    return NextResponse.json({ items, total: items.length, range: { from: toYMDUTC(fromDate), to: toYMDUTC(new Date(toDate.getTime() - 86400000)) } });
+    return NextResponse.json({
+      items,
+      total: items.length,
+      range: { from: toYMDUTC(fromDate), to: toYMDUTC(new Date(toDate.getTime() - 86400000)) },
+    });
   } catch (e: any) {
     console.error("API Error in /api/m/realtime:", e);
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
-
 
 
 
