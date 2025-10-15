@@ -21,15 +21,32 @@ export async function GET(req: NextRequest) {
       where: { hospitalId: org.id, id: { in: ids } },
       orderBy: [{ createdAt: "asc" }],
       select: {
-        id: true, name: true, phone: true, patientBirth: true, date: true, time: true,
-        status: true, createdAt: true, meta: true,
+        id: true,
+        name: true,
+        phone: true,
+        patientBirth: true,
+        date: true,
+        time: true,
+        status: true,
+        createdAt: true,
+        meta: true,
         package: { select: { title: true, category: true } },
       },
     });
 
-    const file = await buildRealtimeWorkbook(rows);
-    const filename = `mediswitch-booking-${new Date().toISOString().slice(0,10)}.xlsx`;
-    return new NextResponse(file, {
+    const fileData = await buildRealtimeWorkbook(rows); // Buffer | Uint8Array | ArrayBuffer
+    const filename = `mediswitch-booking-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    // Convert Node Buffer/Uint8Array to ArrayBuffer for NextResponse
+    let body: ArrayBuffer;
+    if (fileData instanceof ArrayBuffer) {
+      body = fileData;
+    } else {
+      const b: any = fileData; // Buffer or Uint8Array
+      body = b.buffer.slice(b.byteOffset || 0, (b.byteOffset || 0) + (b.byteLength || b.length || 0));
+    }
+
+    return new NextResponse(body, {
       status: 200,
       headers: {
         "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
