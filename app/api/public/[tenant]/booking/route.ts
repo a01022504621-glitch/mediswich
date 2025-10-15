@@ -1,3 +1,4 @@
+// 경로: mediswich/app/api/public/[tenant]/booking/route.ts
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -57,10 +58,19 @@ async function findClosedDates(hospitalId: string, fromStart: Date, toNextStart:
   return closed;
 }
 
+// 카테고리 → 검진유형 라벨
+const categoryToLabel = (cat?: string | null) => {
+  const u = String(cat || "").toUpperCase();
+  if (u === "NHIS") return "공단검진";
+  if (u === "CORP") return "기업/단체";
+  return "종합검진";
+};
+
 export async function POST(req: NextRequest, { params }: { params: { tenant: string } }) {
   try {
     const body = await req.json();
     const {
+      // 기본
       packageId,
       packageName,
       name,
@@ -74,6 +84,15 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
       exams,
       survey,
       status,
+
+      // 메타 강화(예약자 페이지 or 외부 연동에서 전달 가능)
+      examSnapshot,          // { groups:[{id,label,selected:[{name,code}]}], selectedA, selectedB, examCodes }
+      examType,              // "공단검진" | "종합검진" | "기업/단체" (없으면 패키지 카테고리로 유추)
+      totalKRW,              // 총 비용(패키지+옵션 등)
+      companySupportKRW,     // 회사지원금
+      coPayKRW,              // 본인부담금(미지정 시 total - support)
+      corpName, corp, grade, // 선택적 고객사 메타
+      specialExam, specialMaterial, healthCert, // 특수검진 관련
     } = body || {};
 
     if (!packageId || !name || !phone || !datetime) {
@@ -88,7 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
 
     const pkg = await prisma.package.findFirst({
       where: { id: packageId, hospitalId: hosp.id, visible: true },
-      select: { id: true },
+      select: { id: true, title: true, price: true, category: true },
     });
     if (!pkg) return NextResponse.json({ error: "package not found" }, { status: 404 });
 
@@ -133,6 +152,31 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
     const phoneDigits = String(phone).replace(/\D/g, "");
     const sexEnum = inferSex(sex);
 
+    // 비용 보정
+    const pkgPrice = Number(pkg.price ?? 0) || 0;
+    const total = Number(totalKRW ?? pkgPrice) || 0;
+    const support = Number(companySupportKRW ?? 0) || 0;
+    const copay = Number(coPayKRW ?? Math.max(0, total - support)) || 0;
+
+    // 검진유형 보정
+    const examTypeLabel = String(examType || categoryToLabel(pkg.category));
+
+    // examSnapshot 정규화
+    const snapIn = examSnapshot ?? {};
+    const groups = Array.isArray(snapIn?.groups) ? snapIn.groups : [];
+    const snap = {
+      groups: groups.map((g: any) => ({
+        id: g?.id ?? g?.gid ?? g?.label ?? "",
+        label: String(g?.label || ""),
+        selected: Array.isArray(g?.selected)
+          ? g.selected.map((s: any) => ({ name: String(s?.name || ""), code: String(s?.code || "") }))
+          : [],
+      })),
+      selectedA: snapIn?.selectedA || "",
+      selectedB: snapIn?.selectedB || "",
+      examCodes: snapIn?.examCodes || "",
+    };
+
     const created = await prisma.booking.create({
       data: {
         hospitalId: hosp.id,
@@ -151,13 +195,30 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
           return "PENDING";
         })(),
         meta: {
+          // 기존
           foreigner: !!foreigner,
           email: email || null,
           address: address || null,
           exams: exams || null,
           survey: survey || null,
-          packageName: packageName || null,
+          packageName: packageName || pkg.title || null,
           source: "public",
+
+          // 신규/보강
+          examSnapshot: snap,
+          examType: examTypeLabel,              // 공단검진/종합검진/기업/단체
+          totalKRW: total,
+          companySupportKRW: support,
+          coPayKRW: copay,
+          packageCategory: pkg.category || null,
+          packageCategoryLabel: examTypeLabel,
+
+          // 선택적 부가 메타 패스스루
+          corpName: corpName ?? corp ?? null,
+          grade: grade ?? null,
+          specialExam: specialExam ?? null,
+          specialMaterial: specialMaterial ?? null,
+          healthCert: !!healthCert || false,
         },
       },
       select: { id: true, code: true },
@@ -168,4 +229,7 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
+
+
+
 

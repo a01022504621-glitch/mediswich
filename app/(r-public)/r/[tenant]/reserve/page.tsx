@@ -21,6 +21,13 @@ function normalizePhone(raw: string) {
   if (d.length === 11) return d.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
   return raw;
 }
+function catLabel(c?: string | null) {
+  const u = String(c ?? "").toUpperCase();
+  if (u === "NHIS") return "공단검진";
+  if (u === "GENERAL") return "종합검진";
+  if (u === "CORP") return "기업/단체";
+  return "";
+}
 
 export default async function TenantReserve({
   params,
@@ -58,6 +65,7 @@ export default async function TenantReserve({
   const pkg = searchParams.packageId
     ? await prisma.package.findFirst({
         where: { id: searchParams.packageId, hospitalId: tenantId, visible: true },
+        select: { id: true, title: true, summary: true, price: true, category: true },
       })
     : null;
 
@@ -84,6 +92,7 @@ export default async function TenantReserve({
 
     const pkg = await prisma.package.findFirst({
       where: { id: packageId, hospitalId: tenantId, visible: true },
+      select: { id: true, title: true, category: true, price: true },
     });
     if (!pkg) throw new Error("상품을 찾을 수 없습니다.");
 
@@ -92,9 +101,13 @@ export default async function TenantReserve({
     });
     const tpl = await prisma.slotTemplate.findFirst({
       where: { hospitalId: tenantId, dow: date.getDay(), start: time },
+      select: { capacity: true },
     });
     const capacity = tpl?.capacity ?? 1;
     if (concurrent >= capacity) throw new Error("해당 시간은 예약이 마감되었습니다.");
+
+    const price = Number(pkg.price ?? 0) || 0;
+    const label = catLabel(pkg.category as any);
 
     await prisma.booking.create({
       data: {
@@ -104,8 +117,18 @@ export default async function TenantReserve({
         time,
         name,
         phone,
-        phoneNormalized: phone.replace(/\D+/g, ""),
+        phoneNormalized: phone.replace(/\D/g, ""),
         status: "CONFIRMED",
+        meta: {
+          source: "reserve-page",
+          packageName: pkg.title,
+          packageCategory: String(pkg.category || ""),
+          packageCategoryLabel: label,
+          examType: label, // 엑셀 "검진유형"과 동일
+          totalKRW: price,
+          companySupportKRW: 0,
+          coPayKRW: price,
+        },
       },
     });
     revalidatePath(`/r/${tenantSlug}`);
@@ -133,6 +156,8 @@ export default async function TenantReserve({
           <div className="text-[11px] tracking-wide text-slate-500">선택된 상품</div>
           <div className="mt-1 font-semibold text-slate-900">{pkg.title}</div>
           <div className="mt-1 text-sm text-slate-600">{pkg.summary ?? ""}</div>
+          <div className="mt-1 text-xs text-slate-500">검진유형: {catLabel(pkg.category as any) || "-"}</div>
+          <div className="mt-0.5 text-xs text-slate-500">당일 결제 비용: {(Number(pkg.price ?? 0) || 0).toLocaleString()}원</div>
         </div>
       )}
 
@@ -193,5 +218,6 @@ export default async function TenantReserve({
     </main>
   );
 }
+
 
 

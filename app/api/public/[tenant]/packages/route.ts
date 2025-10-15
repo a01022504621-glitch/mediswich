@@ -4,13 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createHash } from "crypto";
 
-// CDN 캐시(미들웨어에서도 설정되지만, 여기서도 보강)
 const CC_PUBLIC = "public, s-maxage=60, stale-while-revalidate=600";
-
-// JsonValue -> 객체 안전 캐스팅
 type JsonObj = Record<string, any>;
-const obj = (v: unknown): JsonObj =>
-  v && typeof v === "object" && !Array.isArray(v) ? (v as JsonObj) : {};
+const obj = (v: unknown): JsonObj => (v && typeof v === "object" && !Array.isArray(v) ? (v as JsonObj) : {});
 
 /* -------------------- 공통 유틸 -------------------- */
 function normalizeCat(v?: string | null) {
@@ -35,9 +31,7 @@ const toArr = (v: any): any[] => {
 function groupEntries(groups: any): [string, any][] {
   if (!groups) return [];
   if (Array.isArray(groups)) {
-    return groups.map(
-      (g: any, i: number) => [String(g?.id ?? g?.key ?? g?.label ?? `G${i + 1}`), g] as [string, any],
-    );
+    return groups.map((g: any, i: number) => [String(g?.id ?? g?.key ?? g?.label ?? `G${i + 1}`), g] as [string, any]);
   }
   if (typeof groups === "object") return Object.entries(groups);
   return [];
@@ -98,7 +92,7 @@ function pickDate(...cands: any[]): string | null {
   return null;
 }
 
-/** tags.groups 정규화 (응답 전용, DB 미변경) */
+/** tags.groups 정규화 */
 function normalizeTagsForRead(raw: any) {
   if (!raw || typeof raw !== "object") return {};
   const tags = { ...raw };
@@ -134,9 +128,85 @@ function normalizeTagsForRead(raw: any) {
   return { ...tags, groups: map };
 }
 
+/** 성별 정규화 */
+const normSex = (x: any): "M" | "F" | null => {
+  const s = String(x ?? "").trim().toUpperCase();
+  if (["M", "MALE", "남", "남성"].includes(s)) return "M";
+  if (["F", "FEMALE", "여", "여성"].includes(s)) return "F";
+  return null;
+};
+
+/** 목록 응답에도 optionGroups 생성: items[].code 포함 */
+function deriveOptionGroupsFromTags(tags: any) {
+  const out: Array<{ id: string; label: string; chooseCount: number | null; items: any[] }> = [];
+  const groups = tags?.groups || {};
+  for (const [key, g] of Object.entries<any>(groups)) {
+    if (looksBasicKey(key) || g?.basic === true || g?.type === "BASIC") continue;
+
+    const groupSex = normSex(g?.sex ?? g?.gender ?? g?.sexNormalized);
+
+    const items = toArr(g?.values ?? g?.items ?? g?.options ?? g)
+      .map((x: any, idx: number) => {
+        const itemSex = normSex(x?.sex ?? x?.gender ?? x?.sexNormalized) ?? groupSex ?? null;
+        const code = ((): string => {
+          const c = x?.code ?? x?.examCode ?? x?.kcode ?? x?.kCode ?? x?.Code ?? null;
+          return c != null ? String(c).trim() : "";
+        })();
+        return {
+          id: String(x?.id ?? x?.code ?? `${key}-${idx + 1}`),
+          name: String(x?.name ?? x?.title ?? x ?? "").trim(),
+          price:
+            typeof x?.price === "number"
+              ? x.price
+              : typeof x?.priceKRW === "number"
+              ? x.priceKRW
+              : undefined,
+          resource: x?.resource ?? null,
+          sex: itemSex,
+          sexNormalized: itemSex,
+          gender: itemSex,
+          code, // ← 핵심
+        };
+      })
+      .filter((x: any) => !!x.name);
+
+    const choose =
+      Number(g?.chooseCount) ||
+      Number(g?.choose) ||
+      Number(g?.pick) ||
+      Number(g?.minPick) ||
+      Number(g?.min) ||
+      0;
+
+    out.push({
+      id: String(g?.id ?? key),
+      label: String(g?.label ?? key),
+      chooseCount: Number.isFinite(choose) && choose > 0 ? choose : null,
+      items,
+    });
+  }
+  return out;
+}
+
+/** 기본검사 목록 파생 */
+function deriveBaseExamsFromTags(tags: any): string[] {
+  const groups = tags?.groups || {};
+  const entry =
+    Object.entries<any>(groups).find(([k, g]) => looksBasicKey(k) || g?.basic === true || g?.type === "BASIC") ?? null;
+
+  if (entry) {
+    const [, g] = entry;
+    return toArr(g?.values ?? g?.items ?? g?.options ?? g)
+      .map((x: any) => String(x?.name ?? x?.title ?? x ?? "").trim())
+      .filter(Boolean);
+  }
+  return toArr(tags?.basicItems ?? tags?.basic ?? []).map((x: any) => String(x?.name ?? x?.title ?? x ?? "").trim());
+}
+
 /** 기본/선택 개수 계산 */
 function countFromTags(tags: any) {
-  let basic = 0, optional = 0;
+  let basic = 0,
+    optional = 0;
 
   try {
     const entries = groupEntries(tags?.groups);
@@ -203,7 +273,7 @@ function countFromTags(tags: any) {
     if (!opt) {
       opt = Math.max(
         deepPickNumber(tags, /(option|optional|선택).*(count|num|개|수)/i),
-        Number(tags?.optionCount || tags?.optionalCount || 0),
+        Number(tags?.optionCount || tags?.optionalCount || 0)
       );
     }
     optional = Math.max(optional, opt);
@@ -254,7 +324,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
 
     const where: any = { hospitalId: hospital.id, visible: true, category: cat };
 
-    // ── 기업 패키지일 때만 code 처리
+    // 기업 패키지
     let client: any = null;
     if (cat === "CORP" && code) {
       client = await prisma.client.findFirst({
@@ -285,6 +355,10 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
     const packages = rows.map((p) => {
       const tagsRaw = obj(p.tags);
       const tagsNormalized = normalizeTagsForRead(tagsRaw);
+
+      // 파생 필드들
+      const optionGroups = deriveOptionGroupsFromTags(tagsNormalized); // items[].code 포함
+      const baseExams = deriveBaseExamsFromTags(tagsNormalized);
       const { basic, optional } = countFromTags(tagsNormalized);
       const billing = deriveBilling(tagsNormalized, p.price);
 
@@ -330,10 +404,14 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
         periodTo: e,
         dateFrom: s,
         dateTo: e,
+        // 예약 클라이언트 fallback 대비
+        optionGroups,
+        basicExams: baseExams,
+        baseExams,
       };
     });
 
-    // ETag 처리(304 지원)
+    // ETag
     const body = { ok: true, packages, items: packages, client };
     const json = JSON.stringify(body);
     const etag = `"W/${createHash("sha1").update(json).digest("base64")}"`;
@@ -353,7 +431,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: String(e?.message || e) },
-      { status: 500, headers: { "cache-control": "no-store" } },
+      { status: 500, headers: { "cache-control": "no-store" } }
     );
   }
 }

@@ -81,7 +81,7 @@ function addMonths(d: Date, n: number) {
   return r;
 }
 
-/* 성별 추론 */
+/* 성별 */
 function inferSexFromDigit(d?: string) {
   const n = Number(d);
   if ([1, 3, 5, 7].includes(n)) return "M";
@@ -103,20 +103,6 @@ function isItemAllowedBySex(item: PkgItem | Addon, userSex: "" | "M" | "F") {
   return meta === userSex;
 }
 
-type DayUP = "OPEN" | "FULL" | "CLOSED";
-function normDayStatus(v: any): DayUP {
-  const s = String(v ?? "").toUpperCase();
-  if (s === "CLOSED" || s === "CLOSE") return "CLOSED";
-  if (s === "FULL") return "FULL";
-  return "OPEN";
-}
-function normSlotStatus(v: any): Slot["status"] {
-  const s = String(v ?? "").toUpperCase();
-  if (s === "CLOSED" || s === "CLOSE") return "CLOSED";
-  if (s === "FULL") return "FULL";
-  return "OPEN";
-}
-
 /* 캘린더(6주) */
 function buildCalendar(cursor: Date) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -131,6 +117,9 @@ function buildCalendar(cursor: Date) {
   }
   return cells;
 }
+
+/* 검사코드 유효성 */
+const isValidExamCode = (v: any) => /^[A-Za-z]{1,5}\d{2,6}$/i.test(String(v ?? "").trim());
 
 export default function Page({ params }: { params: { tenant: string } }) {
   const router = useRouter();
@@ -162,6 +151,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
     showBasic: false,
     showAddons: false,
     examSelected: {} as Record<string, string[]>,
+    selectedAddons: [] as string[],
     date: new Date(),
     time: "",
     survey: { procedureHistory: "", teethStatus: "", flightPlan2weeks: "" },
@@ -222,13 +212,27 @@ export default function Page({ params }: { params: { tenant: string } }) {
     });
   }, [form.sex, pkg]); // eslint-disable-line
 
+  /* 가시 Add-on, 결제합계 */
+  const visibleAddons = useMemo(
+    () => (addons || []).filter((a) => a.visible !== false && isItemAllowedBySex(a, form.sex as "" | "M" | "F")),
+    [addons, form.sex]
+  );
+  const addonTotal = useMemo(
+    () =>
+      visibleAddons
+        .filter((a) => (form.selectedAddons || []).includes(a.id))
+        .reduce((s, a) => s + (Number(a.price ?? 0) || 0), 0),
+    [visibleAddons, form.selectedAddons]
+  );
+  const payToday = (Number(pkg?.price) || 0) + addonTotal;
+
   const canNext = useMemo(() => {
     const k = STEPS[stepIndex].key;
     if (k === "terms") return form.terms.privacy && form.terms.notify;
     if (k === "info") {
       const phoneOk = /^010-\d{3,4}-\d{4}$/.test(form.phone);
       const birthOk = /^\d{6}-\d$/.test(form.birth7);
-      return form.name && phoneOk && birthOk && form.postal && form.address1;
+      return form.name && phoneOk && birthOk && form.postal && form.address1 && form.address2; // 상세주소 필수
     }
     if (k === "exam") {
       const groups = filteredGroups().groups;
@@ -326,7 +330,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
             pkgBasic={filteredGroups().basic}
             pkgGroups={filteredGroups().groups}
             pkgPrice={Number(pkg?.price) || 0}
-            addons={addons}
+            addons={visibleAddons}
             endoscopyFlags={endoscopyFlags}
             sex={form.sex}
             t={t}
@@ -340,7 +344,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
           {STEPS[stepIndex].key === "exam" && (
             <div className="w-full mb-3 rounded-2xl px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold">
               {t("당일 결제 비용", "Pay at hospital")}
-              <span className="float-right">{(Number(pkg?.price) || 0).toLocaleString()}원</span>
+              <span className="float-right">{payToday.toLocaleString()}원</span>
             </div>
           )}
           <div className="flex gap-2">
@@ -432,7 +436,7 @@ function StepTerms({ form, setForm, t }: { form: any; setForm: any; t: (ko: stri
       <Card>
         <label className="flex items-center gap-3 select-none p-3 rounded-2xl bg-slate-50 border border-slate-200">
           <input type="checkbox" checked={terms.all} onChange={(e) => toggleAll(e.target.checked)} className="size-5 rounded border-slate-300" />
-          <div className="text-[15px] font-semibold">{t("전체 동의합니다", "Agree to all")}</div>
+          <div className="text-[15px] font-semibold"> {t("전체 동의합니다", "Agree to all")}</div>
         </label>
         <CheckRow
           checked={terms.privacy}
@@ -559,16 +563,40 @@ function LabelWithStar({ text, required }: { text: string; required?: boolean })
     </span>
   );
 }
+
+/* Postcode: 임베드 레이어 팝업(배포에서 작은 창 문제 해결) */
 function openPostcode(setForm: React.Dispatch<React.SetStateAction<any>>) {
   return async () => {
     await ensureDaumPostcode();
+    const layer = document.createElement("div");
+    layer.id = "postcode-layer";
+    layer.style.cssText =
+      "position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;";
+    const box = document.createElement("div");
+    box.style.cssText =
+      "width:min(520px,96vw);height:min(520px,80vh);background:#fff;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.2);";
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "width:100%;height:100%;";
+    const close = document.createElement("button");
+    close.textContent = "✕";
+    close.style.cssText =
+      "position:absolute;right:8px;top:8px;border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:4px 8px;cursor:pointer;z-index:1;";
+    close.onclick = () => document.body.removeChild(layer);
+    box.appendChild(close);
+    box.appendChild(wrap);
+    layer.appendChild(box);
+    document.body.appendChild(layer);
+
     const w = window as any;
     new w.daum.Postcode({
       oncomplete: (data: any) => {
         const addr = data.roadAddress || data.address;
         setForm((f: any) => ({ ...f, postal: data.zonecode, address1: addr }));
+        document.body.removeChild(layer);
       },
-    }).open();
+      width: "100%",
+      height: "100%",
+    }).embed(wrap);
   };
 }
 function ensureDaumPostcode() {
@@ -621,13 +649,16 @@ function StepExam({
   function resetGroup(groupId: string) {
     setForm((f: any) => ({ ...f, examSelected: { ...(f.examSelected || {}), [groupId]: [] } }));
   }
-
-  const visibleAddons = useMemo(() => {
-    return (addons || []).filter((a) => {
-      if (a.visible === false) return false;
-      return isItemAllowedBySex(a, sex);
+  function toggleAddon(id: string) {
+    setForm((f: any) => {
+      const cur = new Set<string>(f.selectedAddons || []);
+      if (cur.has(id)) cur.delete(id);
+      else cur.add(id);
+      return { ...f, selectedAddons: Array.from(cur) };
     });
-  }, [addons, sex]);
+  }
+
+  const visibleAddons = addons; // 이미 상위에서 필터됨
 
   return (
     <section className="space-y-4">
@@ -667,7 +698,7 @@ function StepExam({
           <Card key={gid} title={g.label || t("선택검사", "Options")} caption={need ? `${picked} / ${need} ${t("선택", "selected")}` : undefined}>
             {need === 0 && <p className="text-sm text-slate-500 mb-2">{t("선택사항 없음", "No options")}</p>}
             <div className="grid grid-cols-1 gap-2">
-              {(g.items || []).map((x, xi) => {
+              {(g.items || []).filter((it) => isItemAllowedBySex(it, sex)).map((x, xi) => {
                 const key = itemKeyFrom(x, xi);
                 const active = (form.examSelected?.[gid] || []).includes(key);
                 const lock = !active && picked >= need && need > 0;
@@ -723,7 +754,7 @@ function StepExam({
               />
             </Field>
             {(endoscopyFlags.hasColo || (endoscopyFlags.hasEGD && endoscopyFlags.hasColo)) && (
-              <Field label={t("검진 후 2주 이내 비행 계획", "Flight plan within 2 weeks after exam")}>
+              <Field label={t("검진 후 2주이내 비행계획", "Flight plan within 2 weeks after exam")}>
                 <div className="flex gap-2">
                   {["없음", "있음"].map((k) => (
                     <button
@@ -744,22 +775,33 @@ function StepExam({
         </Card>
       )}
 
-      <Card title={t("추가검사", "Add-on exams")} caption={visibleAddons.length ? `${visibleAddons.length}${t("개", " items")}` : undefined}>
+      <Card title={t("추가검사", "Add-on exams")} caption={addons.length ? `${addons.length}${t("개", " items")}` : undefined}>
         <button onClick={() => setForm((f: any) => ({ ...f, showAddons: !f.showAddons }))} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-left">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">{t("추가검사 보기", "Show add-ons")}</div>
-            <div className="text-[12px] text-slate-500">{visibleAddons.length}</div>
+            <div className="text-[12px] text-slate-500">{addons.length}</div>
           </div>
         </button>
         {form.showAddons && (
-          <ul className="mt-3 text-[13px] text-slate-700 space-y-1">
-            {visibleAddons.map((a) => (
-              <li key={a.id} className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                <span>{a.name}</span>
-                <span className="font-medium">{(Number(a.price) || 0).toLocaleString()}원</span>
-              </li>
-            ))}
-            {visibleAddons.length === 0 && <li className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500">{t("등록된 항목이 없습니다.", "No registered add-ons.")}</li>}
+          <ul className="mt-3 text-[13px] text-slate-700 space-y-2">
+            {addons.map((a) => {
+              const active = (form.selectedAddons || []).includes(a.id);
+              return (
+                <li key={a.id}>
+                  <button
+                    onClick={() => toggleAddon(a.id)}
+                    className={cx(
+                      "w-full px-3 py-2 rounded-xl border flex items-center justify-between",
+                      active ? "border-[#2457ff] bg-[#eff3ff] text-[#163ec9]" : "border-slate-200 bg-white hover:bg-slate-50"
+                    )}
+                  >
+                    <span className="truncate">{a.name}</span>
+                    <span className="font-medium">{(Number(a.price) || 0).toLocaleString()}원</span>
+                  </button>
+                </li>
+              );
+            })}
+            {addons.length === 0 && <li className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500">{t("등록된 항목이 없습니다.", "No registered add-ons.")}</li>}
           </ul>
         )}
       </Card>
@@ -800,14 +842,16 @@ function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: a
 
         <div className="grid grid-cols-7 gap-2">
           {cal.map((d, i) => {
+            if (!d.inMonth) {
+              return <div key={i} className="aspect-square" />; // 타월 날짜는 빈 셀
+            }
             const key = ymdKey(d.date);
-            const isThisMonth = d.inMonth;
             const isToday = key === todayKey;
             const isSelected = key === selectedKey;
 
             const raw = monthMap[key];
-            const status: DayUP = raw ? normDayStatus(raw) : isThisMonth ? "OPEN" : "CLOSED";
-            const disabled = !isThisMonth || status === "CLOSED" || status === "FULL";
+            const status: "OPEN" | "FULL" | "CLOSED" = raw ? (String(raw).toUpperCase() as any) : "OPEN";
+            const disabled = status === "CLOSED" || status === "FULL";
 
             const clsBadge =
               isSelected ? "bg-[#2457ff] text-white border-[#2457ff]" : status === "OPEN" ? "bg-blue-50 text-blue-600 border-blue-200" : status === "FULL" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-600 border-rose-200";
@@ -819,7 +863,7 @@ function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: a
                 className={cx(
                   "aspect-square rounded-2xl border relative flex flex-col items-center justify-center transition",
                   "text-sm",
-                  isThisMonth ? "bg-white border-slate-200" : "bg-slate-50 border-slate-100 text-slate-300",
+                  "bg-white border-slate-200",
                   isToday && "ring-1 ring-blue-200",
                   isSelected && "border-[#2457ff] bg-[#eff3ff]",
                   disabled && "opacity-60 pointer-events-none"
@@ -839,7 +883,7 @@ function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: a
         {form.date ? (
           <div className="grid grid-cols-3 gap-2">
             {slots.map((s) => {
-              const st = normSlotStatus(s.status);
+              const st = String(s.status || "").toUpperCase() as Slot["status"];
               const active = form.time === s.time;
               return (
                 <button
@@ -958,11 +1002,10 @@ async function fetchCapacityMonth(tenant: string, ym: string): Promise<CapacityM
   const raw: any = j?.days ?? j;
   if (!raw || typeof raw !== "object") return {};
   const out: CapacityMonth = {};
-  for (const [k, v] of Object.entries(raw)) out[k] = normDayStatus(v);
+  for (const [k, v] of Object.entries(raw)) out[k] = (String(v).toUpperCase() as any) || "OPEN";
   return out;
 }
 async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
-  // 1) /timeslots 2) /slots 3) /capacity(date) → 실패 시 기본 07:00~10:00 30분
   const urls = [
     `/api/public/${tenant}/timeslots?date=${ymd}`,
     `/api/public/${tenant}/slots?date=${ymd}`,
@@ -980,7 +1023,7 @@ async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
       const mapped: Slot[] = raw
         .map((s: any) => {
           const time = s?.time || s?.hhmm || s?.start || (typeof s === "string" ? s : "");
-          const status: Slot["status"] = s?.status ? normSlotStatus(s.status) : (s?.available === false ? "FULL" : "OPEN");
+          const status: Slot["status"] = s?.status ? (String(s.status).toUpperCase() as any) : (s?.available === false ? "FULL" : "OPEN");
           return { time, status };
         })
         .filter((x) => typeof x.time === "string" && /^\d{2}:\d{2}$/.test(x.time));
@@ -1009,21 +1052,33 @@ async function createBooking(payload: any): Promise<boolean> {
     return false;
   }
 }
+
+/* buildBookingPayload: 코드만 저장 + 유효코드만 엑셀로 */
 function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayload | null, form: any) {
-  // 그룹별 선택 스냅샷
   const groupsSnap = (pkg?.optionGroups || []).map((g, gi) => {
     const gid = groupIdOf(g, gi);
     const picked = new Set(form?.examSelected?.[gid] || []);
     const selected = (g.items || [])
-      .map((it, xi) => ({ key: itemKeyFrom(it, xi), name: it?.name || "", code: it?.code || it?.examId || it?.id || "" }))
+      .map((it, xi) => ({
+        key: itemKeyFrom(it, xi),
+        name: it?.name || "",
+        code: typeof (it as any)?.code === "string" ? String((it as any).code).trim() : "",
+      }))
       .filter((x) => picked.has(x.key))
       .map((x) => ({ name: x.name, code: x.code }));
     return { id: gid, label: g?.label || "", selected };
   });
-  const labelJoin = (rx: RegExp) => groupsSnap.find((g) => rx.test(g.label))?.selected.map((s) => s.name).filter(Boolean).join(",") || "";
+
+  const labelJoin = (rx: RegExp) =>
+    groupsSnap.find((g) => rx.test(g.label))?.selected.map((s) => s.name).filter(Boolean).join(",") || "";
   const selectedA = labelJoin(/A/i);
   const selectedB = labelJoin(/B/i);
-  const examCodes = groupsSnap.flatMap((g) => g.selected.map((s) => s.code).filter(Boolean)).join(",");
+
+  const examCodes = groupsSnap
+    .flatMap((g) => g.selected.map((s) => s.code))
+    .filter(isValidExamCode)
+    .join(",");
+
   const coPayKRW = Number(pkg?.price) || 0;
 
   return {
@@ -1040,13 +1095,14 @@ function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayl
     disease: form.disease,
     address: { postal: form.postal, address1: form.address1, address2: form.address2 },
     exams: { basic: pkg?.basicExams || [], optional: form.examSelected || {} },
-    examSnapshot: { groups: groupsSnap, selectedA, selectedB, examCodes },
+    examSnapshot: { groups: groupsSnap, selectedA, selectedB, examCodes, addons: form.selectedAddons || [] },
     coPayKRW,
     datetime: `${ymdKey(form.date)} ${form.time}`,
     status: "PENDING",
     survey: form.survey || {},
   };
 }
+
 
 
 

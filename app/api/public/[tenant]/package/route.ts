@@ -97,7 +97,7 @@ function normalizeTagsForRead(raw: any) {
   return { ...tags, groups: map };
 }
 
-/** optionGroups 파생 */
+/** optionGroups 파생: 반드시 items[].code 포함 */
 function deriveOptionGroupsFromTags(tags: any) {
   const out: Array<{ id: string; label: string; chooseCount: number | null; items: any[] }> = [];
   const groups = tags?.groups || {};
@@ -109,6 +109,10 @@ function deriveOptionGroupsFromTags(tags: any) {
     const items = toArr(g?.values ?? g?.items ?? g?.options ?? g)
       .map((x: any, idx: number) => {
         const itemSex = normSex(x?.sex ?? x?.gender ?? x?.sexNormalized) ?? groupSex ?? null;
+        const code = ((): string => {
+          const c = x?.code ?? x?.examCode ?? x?.kcode ?? x?.kCode ?? x?.Code ?? null;
+          return c != null ? String(c).trim() : "";
+        })();
         return {
           id: String(x?.id ?? x?.code ?? `${key}-${idx + 1}`),
           name: String(x?.name ?? x?.title ?? x ?? "").trim(),
@@ -117,6 +121,7 @@ function deriveOptionGroupsFromTags(tags: any) {
           sex: itemSex,
           sexNormalized: itemSex,
           gender: itemSex,
+          code, // ← 핵심
         };
       })
       .filter((x: any) => !!x.name);
@@ -225,7 +230,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       price: pkg.price,
       priceKRW: pkg.price,
       tags: tagsNormalized,
-      optionGroups,
+      optionGroups,           // items[].code 포함
       baseExams,
       basicExams: baseExams,
       // 기간(호환 키 포함)
