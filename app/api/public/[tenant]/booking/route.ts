@@ -1,4 +1,4 @@
-// 경로: mediswich/app/api/public/[tenant]/booking/route.ts
+// app/api/public/[tenant]/booking/route.ts
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -6,12 +6,20 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type YMD = `${number}-${number}-${number}`;
+/* ── 간단 레이트리밋: 10분 15회/IP */
+type RLState = { c: number; t: number };
+const RL: Map<string, RLState> = (globalThis as any).__medis_rl__ ?? ((globalThis as any).__medis_rl__ = new Map());
+function allow(ip: string, limit = 15, windowMs = 10 * 60 * 1000) {
+  const now = Date.now();
+  const cur = RL.get(ip) ?? { c: 0, t: now };
+  if (now - cur.t > windowMs) { cur.c = 0; cur.t = now; }
+  cur.c += 1; RL.set(ip, cur);
+  return cur.c <= limit;
+}
 
+type YMD = `${number}-${number}-${number}`;
 const toYMD = (d: Date): YMD =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}` as YMD;
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` as YMD;
 
 const parseYMD_HHMM = (s: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/.exec(String(s || "").trim());
@@ -58,7 +66,6 @@ async function findClosedDates(hospitalId: string, fromStart: Date, toNextStart:
   return closed;
 }
 
-// 카테고리 → 검진유형 라벨
 const categoryToLabel = (cat?: string | null) => {
   const u = String(cat || "").toUpperCase();
   if (u === "NHIS") return "공단검진";
@@ -68,31 +75,22 @@ const categoryToLabel = (cat?: string | null) => {
 
 export async function POST(req: NextRequest, { params }: { params: { tenant: string } }) {
   try {
+    // 레이트리밋
+    const ip =
+      (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+      req.headers.get("x-real-ip") ||
+      "0.0.0.0";
+    if (!allow(ip)) {
+      return new NextResponse("Too Many Requests", { status: 429, headers: { "Retry-After": "600" } });
+    }
+    await new Promise((r) => setTimeout(r, 300)); // 봇 완화
+
     const body = await req.json();
     const {
-      // 기본
-      packageId,
-      packageName,
-      name,
-      phone,
-      birth,
-      sex,
-      datetime,
-      email,
-      address,
-      foreigner,
-      exams,
-      survey,
-      status,
-
-      // 메타 강화(예약자 페이지 or 외부 연동에서 전달 가능)
-      examSnapshot,          // { groups:[{id,label,selected:[{name,code}]}], selectedA, selectedB, examCodes }
-      examType,              // "공단검진" | "종합검진" | "기업/단체" (없으면 패키지 카테고리로 유추)
-      totalKRW,              // 총 비용(패키지+옵션 등)
-      companySupportKRW,     // 회사지원금
-      coPayKRW,              // 본인부담금(미지정 시 total - support)
-      corpName, corp, grade, // 선택적 고객사 메타
-      specialExam, specialMaterial, healthCert, // 특수검진 관련
+      packageId, packageName, name, phone, birth, sex, datetime,
+      email, address, foreigner, exams, survey, status,
+      examSnapshot, examType, totalKRW, companySupportKRW, coPayKRW,
+      corpName, corp, grade, specialExam, specialMaterial, healthCert,
     } = body || {};
 
     if (!packageId || !name || !phone || !datetime) {
@@ -107,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
 
     const pkg = await prisma.package.findFirst({
       where: { id: packageId, hospitalId: hosp.id, visible: true },
-      select: { id: true, title: true, price: true, category: true },
+      select: { id: true, title: true, price: true, category: true, clientId: true },
     });
     if (!pkg) return NextResponse.json({ error: "package not found" }, { status: 404 });
 
@@ -117,23 +115,22 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
     const dayStart = new Date(dt.date.getFullYear(), dt.date.getMonth(), dt.date.getDate(), 0, 0, 0, 0);
     const nextStart = new Date(dt.date.getFullYear(), dt.date.getMonth(), dt.date.getDate() + 1, 0, 0, 0, 0);
 
+    // 휴무/마감
     const closedMap = await findClosedDates(hosp.id, dayStart, nextStart);
     if (closedMap.has(toYMD(dayStart))) {
       return NextResponse.json({ error: "closed", code: "CLOSED" }, { status: 409 });
     }
 
+    // 수용 인원
     const dow = dayStart.getDay();
     const templates = await prisma.slotTemplate.findMany({
       where: { hospitalId: hosp.id, dow },
       select: { start: true, end: true, capacity: true },
       orderBy: { start: "asc" },
     });
-
     const within = (hhmm: string, start: string, end: string) => start <= hhmm && hhmm <= end;
     let capForSlot = 0;
-    for (const t of templates) {
-      if (within(dt.hhmm, t.start, t.end)) capForSlot = Math.max(capForSlot, t.capacity || 0);
-    }
+    for (const t of templates) if (within(dt.hhmm, t.start, t.end)) capForSlot = Math.max(capForSlot, t.capacity || 0);
     if (capForSlot === 0) capForSlot = 999;
 
     const activeStatuses = ["PENDING", "RESERVED", "CONFIRMED"] as const;
@@ -149,19 +146,45 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
       return NextResponse.json({ error: "full", code: "FULL" }, { status: 409 });
     }
 
+    // 정규화
     const phoneDigits = String(phone).replace(/\D/g, "");
     const sexEnum = inferSex(sex);
-
-    // 비용 보정
     const pkgPrice = Number(pkg.price ?? 0) || 0;
     const total = Number(totalKRW ?? pkgPrice) || 0;
     const support = Number(companySupportKRW ?? 0) || 0;
     const copay = Number(coPayKRW ?? Math.max(0, total - support)) || 0;
-
-    // 검진유형 보정
     const examTypeLabel = String(examType || categoryToLabel(pkg.category));
 
-    // examSnapshot 정규화
+    // 고객사 메타
+    const metaIn = (body && typeof body.meta === "object" && body.meta) ? body.meta : {};
+    const corpCodeIn: string = String(body.corpCode ?? metaIn.corpCode ?? "").trim();
+    let corpNameFinal: string | null = String(corpName ?? corp ?? metaIn.corpName ?? "").trim() || null;
+    let corpCodeFinal: string | null = corpCodeIn || null;
+    let clientIdFinal: string | null = null;
+
+    if (corpCodeIn) {
+      const client = await prisma.client.findFirst({
+        where: { hospitalId: hosp.id, code: { equals: corpCodeIn, mode: "insensitive" } },
+        select: { id: true, name: true, code: true },
+      });
+      if (client) {
+        corpNameFinal = client.name || corpNameFinal;
+        corpCodeFinal = client.code || corpCodeFinal;
+        clientIdFinal = client.id;
+      }
+    }
+    if (!corpNameFinal && pkg.clientId) {
+      const client = await prisma.client.findFirst({
+        where: { id: pkg.clientId, hospitalId: hosp.id },
+        select: { id: true, name: true, code: true },
+      });
+      if (client) {
+        corpNameFinal = client.name || null;
+        corpCodeFinal = client.code || corpCodeFinal;
+        clientIdFinal = client.id;
+      }
+    }
+
     const snapIn = examSnapshot ?? {};
     const groups = Array.isArray(snapIn?.groups) ? snapIn.groups : [];
     const snap = {
@@ -177,54 +200,78 @@ export async function POST(req: NextRequest, { params }: { params: { tenant: str
       examCodes: snapIn?.examCodes || "",
     };
 
-    const created = await prisma.booking.create({
-      data: {
-        hospitalId: hosp.id,
-        packageId: pkg.id,
-        date: dayStart,
-        time: dt.hhmm,
-        name: String(name),
-        phone: String(phone),
-        phoneNormalized: phoneDigits || null,
-        patientBirth: birth ? String(birth) : null,
-        sex: sexEnum as any,
-        status: ((): any => {
-          const s = String(status || "").toUpperCase();
-          if (s === "REQUESTED") return "PENDING";
-          if (["PENDING", "RESERVED", "CONFIRMED"].includes(s)) return s;
-          return "PENDING";
-        })(),
-        meta: {
-          // 기존
-          foreigner: !!foreigner,
-          email: email || null,
-          address: address || null,
-          exams: exams || null,
-          survey: survey || null,
-          packageName: packageName || pkg.title || null,
-          source: "public",
+    const metaOut = {
+      ...(metaIn || {}),
+      foreigner: !!foreigner,
+      email: email || null,
+      address: address || null,
+      exams: exams || null,
+      survey: survey || null,
+      packageName: packageName || pkg.title || null,
+      source: "public" as const,
+      examSnapshot: snap,
+      examType: examTypeLabel,
+      totalKRW: total,
+      companySupportKRW: support,
+      coPayKRW: copay,
+      packageCategory: pkg.category || null,
+      packageCategoryLabel: examTypeLabel,
+      corpName: corpNameFinal,
+      corpCode: corpCodeFinal,
+      clientId: clientIdFinal,
+      grade: grade ?? metaIn.grade ?? null,
+      specialExam: specialExam ?? metaIn.specialExam ?? null,
+      specialMaterial: specialMaterial ?? metaIn.specialMaterial ?? null,
+      healthCert: !!healthCert || !!metaIn.healthCert || false,
+    };
 
-          // 신규/보강
-          examSnapshot: snap,
-          examType: examTypeLabel,              // 공단검진/종합검진/기업/단체
-          totalKRW: total,
-          companySupportKRW: support,
-          coPayKRW: copay,
-          packageCategory: pkg.category || null,
-          packageCategoryLabel: examTypeLabel,
+    // 아이덴포턴시: 병원 스코프 + findFirst
+    const idem = (req.headers.get("idempotency-key") || "").slice(0, 64);
+    if (idem) {
+      const exist = await prisma.booking.findFirst({
+        where: { hospitalId: hosp.id, idempotencyKey: idem },
+        select: { id: true, code: true },
+      });
+      if (exist) {
+        return NextResponse.json({ ok: true, id: exist.id, code: exist.code }, { status: 200, headers: { "cache-control": "no-store" } });
+      }
+    }
 
-          // 선택적 부가 메타 패스스루
-          corpName: corpName ?? corp ?? null,
-          grade: grade ?? null,
-          specialExam: specialExam ?? null,
-          specialMaterial: specialMaterial ?? null,
-          healthCert: !!healthCert || false,
+    // 생성
+    try {
+      const created = await prisma.booking.create({
+        data: {
+          hospitalId: hosp.id,
+          packageId: pkg.id,
+          date: dayStart,
+          time: dt.hhmm,
+          name: String(name),
+          phone: String(phone),
+          phoneNormalized: phoneDigits || null,
+          patientBirth: birth ? String(birth) : null,
+          sex: sexEnum as any,
+          status: ((): any => {
+            const s = String(status || "").toUpperCase();
+            if (s === "REQUESTED") return "PENDING";
+            if (["PENDING", "RESERVED", "CONFIRMED"].includes(s)) return s;
+            return "PENDING";
+          })(),
+          meta: metaOut,
+          idempotencyKey: idem || null,
         },
-      },
-      select: { id: true, code: true },
-    });
-
-    return NextResponse.json({ ok: true, id: created.id, code: created.code });
+        select: { id: true, code: true },
+      });
+      return NextResponse.json({ ok: true, id: created.id, code: created.code }, { status: 201, headers: { "cache-control": "no-store" } });
+    } catch (e: any) {
+      if (e?.code === "P2002" && idem) {
+        const existed = await prisma.booking.findFirst({
+          where: { hospitalId: hosp.id, idempotencyKey: idem },
+          select: { id: true, code: true },
+        });
+        if (existed) return NextResponse.json({ ok: true, id: existed.id, code: existed.code }, { status: 200 });
+      }
+      throw e;
+    }
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }

@@ -1,14 +1,15 @@
+// app/(m-protected)/m/org/capacity/ui/Defaults.client.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 
 /** ───────── types ───────── */
-type Defaults = { BASIC: number; NHIS: number; SPECIAL: number };
+type DefaultsCore = { BASIC: number; SPECIAL: number }; // NHIS 제거(하위호환 전송만)
 type Special = { id: string; name: string };
 
 type SettingsDTO = {
-  specials: string[]; // (레거시 표시용) 사용 안 함
-  defaults: Defaults;
+  specials: string[]; // unused
+  defaults: Partial<DefaultsCore> & { NHIS?: number }; // 하위호환 로드용
   examDefaults: Record<string, number>;
 };
 
@@ -26,9 +27,13 @@ export default function DefaultsEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [defaults, setDefaults] = useState<Defaults>({ BASIC: 40, NHIS: 20, SPECIAL: 12 });
-  const [examDefaults, setExamDefaults] = useState<Record<string, number>>({});
+  const [defaults, setDefaults] = useState<DefaultsCore>({ BASIC: 40, SPECIAL: 12 });
+  const [legacyNHIS, setLegacyNHIS] = useState<number>(0); // 서버 하위호환 전달용
+
+  // 특정검사 목록은 “특정검사설정”에서 등록된 것만 보여준다.
   const [examItems, setExamItems] = useState<Special[]>([]);
+  // 각 항목의 기본 케파 값
+  const [examDefaults, setExamDefaults] = useState<Record<string, number>>({});
 
   // 로드
   useEffect(() => {
@@ -36,48 +41,67 @@ export default function DefaultsEditor() {
       setLoading(true);
       try {
         const s = await safeJSON<SettingsDTO>("/api/capacity/settings/defaults");
-        if (s?.defaults) setDefaults(s.defaults);
+        if (s?.defaults) {
+          setDefaults({
+            BASIC: Number(s.defaults.BASIC ?? 40),
+            SPECIAL: Number(s.defaults.SPECIAL ?? 12),
+          });
+          setLegacyNHIS(Number(s.defaults.NHIS ?? 0));
+        }
         if (s?.examDefaults) setExamDefaults(s.examDefaults);
 
         const sp = await safeJSON<{ items: Special[] }>("/api/capacity/settings/specials");
-        setExamItems(Array.isArray(sp?.items) ? sp.items : []);
+        const items = Array.isArray(sp?.items) ? sp.items : [];
+        setExamItems(items);
+
+        // 목록에 없는 키는 즉시 제거하여 하드코딩 표시 방지
+        setExamDefaults((prev) => {
+          const allowed = new Set(items.map((i) => i.id));
+          const next: Record<string, number> = {};
+          for (const [k, v] of Object.entries(prev || {})) if (allowed.has(k)) next[k] = v;
+          return next;
+        });
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // specials 목록에 있는데 examDefaults에 키가 없으면 0으로 보이도록 메모
-  const mergedExamRows = useMemo(() => {
-    const map = new Map<string, number>(Object.entries(examDefaults || {}));
-    for (const s of examItems) if (!map.has(s.id)) map.set(s.id, 0);
-    return Array.from(map.entries()).map(([id, v]) => ({
-      id,
-      name: examItems.find((x) => x.id === id)?.name || id,
-      value: v || 0,
-    }));
-  }, [examDefaults, examItems]);
+  // 화면에 표시할 로우: 등록된 특정검사 목록만 기준으로 생성
+  const rows = useMemo(
+    () =>
+      examItems.map((s) => ({
+        id: s.id,
+        name: s.name || s.id,
+        value: examDefaults[s.id] ?? 0,
+      })),
+    [examItems, examDefaults],
+  );
 
-  const setDef = (key: keyof Defaults, val: number) =>
+  const setDef = (key: keyof DefaultsCore, val: number) =>
     setDefaults((d) => ({ ...d, [key]: Math.max(0, Math.floor(val || 0)) }));
 
   const setExam = (id: string, val: number) =>
     setExamDefaults((m) => ({ ...m, [id]: Math.max(0, Math.floor(val || 0)) }));
 
-  const removeExam = (id: string) =>
-    setExamDefaults((m) => {
-      const n = { ...m };
-      delete n[id];
-      return n;
-    });
+  // “삭제”는 행 제거가 아니라 값을 0으로 초기화
+  const resetExam = (id: string) => setExamDefaults((m) => ({ ...m, [id]: 0 }));
 
   const save = async () => {
     setSaving(true);
     try {
+      // 목록에 존재하는 항목만 저장
+      const payloadExamDefaults = Object.fromEntries(
+        examItems.map((i) => [i.id, Math.max(0, Math.floor(examDefaults[i.id] || 0))]),
+      );
+
       await fetch("/api/capacity/settings/defaults", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ defaults, examDefaults }),
+        body: JSON.stringify({
+          defaults: { BASIC: defaults.BASIC, SPECIAL: defaults.SPECIAL, NHIS: legacyNHIS },
+          examDefaults: payloadExamDefaults,
+        }),
       });
       alert("저장되었습니다.");
     } catch {
@@ -93,41 +117,47 @@ export default function DefaultsEditor() {
 
   return (
     <div className="space-y-6">
-      {/* 일자 합산 기준 기본 케파 */}
+      {/* 기본 케파 */}
       <section className="rounded-2xl border p-4 shadow-sm bg-white">
-        <h2 className="text-sm font-semibold mb-3">리소스별 기본 수용 인원</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {(["BASIC", "NHIS", "SPECIAL"] as const).map((k) => (
-            <label key={k} className="block">
-              <div className="text-xs text-slate-600 mb-1">
-                {k === "BASIC" ? "기본(BASIC)" : k === "NHIS" ? "공단(NHIS)" : "특수/특정(SPECIAL)"}
-              </div>
-              <input
-                type="number"
-                min={0}
-                value={defaults[k]}
-                onChange={(e) => setDef(k, Number(e.target.value))}
-                className="w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </label>
-          ))}
+        <h2 className="text-sm font-semibold mb-3">기본 케파 설정</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <div className="text-xs text-slate-600 mb-1">기본 케파</div>
+            <input
+              type="number"
+              min={0}
+              value={defaults.BASIC}
+              onChange={(e) => setDef("BASIC", Number(e.target.value))}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+            />
+          </label>
+
+          <label className="block">
+            <div className="text-xs text-slate-600 mb-1">특수검진 케파</div>
+            <input
+              type="number"
+              min={0}
+              value={defaults.SPECIAL}
+              onChange={(e) => setDef("SPECIAL", Number(e.target.value))}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+            />
+          </label>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          요일별 시간대 템플릿의 슬롯 cap 합으로 일일 수용 인원을 계산합니다. 템플릿이 없을 때는 여기 설정값을
-          참고할 수 있도록 백엔드에 반영되어 있습니다.
+          지정한 인원을 초과하면 해당 리소스는 자동 마감됩니다. 달력 카드에는 “예약자수/케파”가 표시됩니다.
         </p>
       </section>
 
-      {/* 특정검사(개별) 기본 케파 */}
+      {/* 특정검사 케파 */}
       <section className="rounded-2xl border p-4 shadow-sm bg-white">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">특정검사별 기본 수용 인원</h2>
+          <h2 className="text-sm font-semibold">특정검사 케파설정</h2>
           <button
             onClick={() => {
-              // specials에 등록된 항목을 모두 행으로 채우되, 비어있는 항목은 0으로
-              const add: Record<string, number> = {};
-              for (const s of examItems) add[s.id] = examDefaults[s.id] ?? 0;
-              setExamDefaults((m) => ({ ...add, ...m }));
+              // 목록 값들을 그대로 다시 덮어써 동기화
+              const map: Record<string, number> = {};
+              for (const s of examItems) map[s.id] = examDefaults[s.id] ?? 0;
+              setExamDefaults(map);
             }}
             className="rounded-lg border px-3 py-1.5 text-xs hover:bg-slate-50"
           >
@@ -145,7 +175,7 @@ export default function DefaultsEditor() {
               </tr>
             </thead>
             <tbody>
-              {mergedExamRows.map((row) => (
+              {rows.map((row) => (
                 <tr key={row.id} className="border-b last:border-b-0">
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-800">{row.name}</div>
@@ -162,7 +192,7 @@ export default function DefaultsEditor() {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <button
-                      onClick={() => removeExam(row.id)}
+                      onClick={() => resetExam(row.id)}
                       className="rounded-lg border px-2 py-1 text-xs hover:bg-rose-50"
                     >
                       삭제
@@ -170,7 +200,7 @@ export default function DefaultsEditor() {
                   </td>
                 </tr>
               ))}
-              {mergedExamRows.length === 0 && (
+              {rows.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-3 py-6 text-center text-slate-500">
                     등록된 특정검사가 없습니다. 상단 “특정검사 설정”에서 먼저 항목을 추가하세요.
@@ -194,5 +224,6 @@ export default function DefaultsEditor() {
     </div>
   );
 }
+
 
 

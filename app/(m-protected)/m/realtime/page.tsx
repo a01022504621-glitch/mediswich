@@ -1,4 +1,3 @@
-// 경로: mediswich/app/(m-protected)/m/realtime/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -47,6 +46,9 @@ type Row = {
   예약신청일: string;
 };
 
+const PAGE_SIZE = 10; // 페이지당 고정 10줄
+const COLS = 14; // 테이블 컬럼 수
+
 export default function RealtimePage() {
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -69,7 +71,6 @@ export default function RealtimePage() {
   const [statusFilter, setStatusFilter] = useState<"전체" | Status>("전체");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState<number>(1);
-  const pageSize = 20;
 
   /** 팝업 상태 */
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
@@ -81,19 +82,47 @@ export default function RealtimePage() {
   /** 일괄변경 UI 상태 */
   const [bulkStatus, setBulkStatus] = useState<Status>("예약확정");
 
-  /** 고객사 목록 로드(ㄱㄴㄷ 정렬) */
+  /** 고객사 목록 로드(여러 엔드포인트 시도) */
   useEffect(() => {
     (async () => {
-      try {
-        const r = await fetch("/api/clients/options", { cache: "no-store" });
-        const j = await r.json();
-        const items: Array<{ id: string; name: string }> = Array.isArray(j?.items) ? j.items : [];
-        const sorted = items.slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
-        setClients(sorted);
-      } catch {
-        setClients([]);
+      async function tryFetch(url: string) {
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
       }
-    })();
+      const candidates = [
+        "/api/m/clients?take=1000",
+        "/api/clients?take=1000",
+        "/api/m/clients/options",
+        "/api/clients/list",
+      ];
+      let data: any = null;
+      for (const u of candidates) {
+        try {
+          data = await tryFetch(u);
+          break;
+        } catch {}
+      }
+      const arr: any[] =
+        Array.isArray(data?.items) ? data.items :
+        Array.isArray(data?.clients) ? data.clients :
+        Array.isArray(data?.rows) ? data.rows :
+        Array.isArray(data?.data?.items) ? data.data.items :
+        Array.isArray(data?.data) ? data.data :
+        Array.isArray(data) ? data : [];
+      const mapped = arr
+        .map((x: any) => ({
+          id: String(x?.id ?? x?.code ?? x?.slug ?? x?.name ?? "").trim(),
+          name: String(x?.name ?? x?.title ?? x?.label ?? "").trim(),
+        }))
+        .filter((x) => x.name);
+      // 중복 제거
+      const uniqMap = new Map<string, { id: string; name: string }>();
+      for (const m of mapped) if (!uniqMap.has(m.name)) uniqMap.set(m.name, m);
+      const final = Array.from(uniqMap.values());
+      final.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      setClients(final);
+    })().catch(() => setClients([]));
   }, []);
 
   /** 데이터 로드 */
@@ -110,10 +139,9 @@ export default function RealtimePage() {
     setPage(1);
   }, [검진연도, 기간From, 기간To]);
 
-  /** 필터링 */
-  const filtered = useMemo(() => {
+  /** 상태 외 필터만 먼저 적용 → 진행현황 카운트는 여기 기준 */
+  const filteredExceptStatus = useMemo(() => {
     let r = [...rows];
-    if (statusFilter !== "전체") r = r.filter(x => x.예약상태 === statusFilter);
     if (고객등급 !== "전체") r = r.filter(x => x.등급 === 고객등급);
     if (고객사Sel !== "전체") r = r.filter(x => x.고객사 === 고객사Sel);
 
@@ -132,17 +160,25 @@ export default function RealtimePage() {
       });
     }
     return r;
-  }, [rows, statusFilter, 고객등급, 고객사Sel, 검진대상자, 조회구분, 기간From, 기간To]);
+  }, [rows, 고객등급, 고객사Sel, 검진대상자, 조회구분, 기간From, 기간To]);
+
+  /** 최종 목록: 상태 필터까지 적용 */
+  const filtered = useMemo(() => {
+    let r = [...filteredExceptStatus];
+    if (statusFilter !== "전체") r = r.filter(x => x.예약상태 === statusFilter);
+    return r;
+  }, [filteredExceptStatus, statusFilter]);
 
   const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  /** 진행현황 카운트(상태 제외 필터 기반) */
   const counts = useMemo(() => {
     const base: Record<Status, number> = { 예약신청: 0, 예약확정: 0, 검진완료: 0, 취소: 0, 검진미실시: 0 };
-    for (const r of filtered) base[r.예약상태]++;
-    return { ...base, totalAll: filtered.length };
-  }, [filtered]);
+    for (const r of filteredExceptStatus) base[r.예약상태]++;
+    return { ...base, totalAll: filteredExceptStatus.length };
+  }, [filteredExceptStatus]);
 
   /** 선택 토글 */
   const allChecked = pageRows.length > 0 && pageRows.every(r => selectedIds.has(r.id));
@@ -314,6 +350,64 @@ export default function RealtimePage() {
     fetchList();
   };
 
+  // 명단 렌더(칸 테두리 + 열 고정 + hover)
+  const renderRow = (r: Row | null, idx: number) => {
+    if (!r) {
+      return (
+        <tr key={`empty_${idx}`}>
+          {Array.from({ length: COLS }).map((_, i) => (
+            <td key={i} className="px-3 py-5 border-b border-r last:border-r-0 border-slate-200" />
+          ))}
+        </tr>
+      );
+    }
+    return (
+      <tr
+        key={r.id}
+        onClick={() => handleRowClick(r)}
+        className="hover:bg-sky-50 cursor-pointer"
+      >
+        <td className="px-3 py-2 text-center border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleOne(r.id, e.target.checked)} />
+        </td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.고객사}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.수검자명}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.등급}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.생년월일}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.예약희망일}</td>
+        <td className="px-3 py-2 w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
+          <DateCell
+            value={r.예약확정일}
+            placeholder="지정"
+            onPick={(d) => quickPick(r, "CONFIRMED", d)}
+            title="예약확정일 지정"
+          />
+        </td>
+        <td className="px-3 py-2 w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
+          <DateCell
+            value={r.검진완료일}
+            placeholder="지정"
+            onPick={(d) => quickPick(r, "COMPLETED", d)}
+            title="검진완료일 지정"
+          />
+        </td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">
+          <span className="inline-flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[r.예약상태]}`} />
+            {r.예약상태}
+          </span>
+        </td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.패키지타입}</td>
+        <td className="px-3 py-2 text-right border-b border-r last:border-r-0 border-slate-200">{Number(r.회사지원금 || 0).toLocaleString()}</td>
+        <td className="px-3 py-2 text-right border-b border-r last:border-r-0 border-slate-200">{Number(r.본인부담금 || 0).toLocaleString()}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.예약신청일}</td>
+      </tr>
+    );
+  };
+
+  const padded = [...pageRows, ...Array.from({ length: Math.max(0, PAGE_SIZE - pageRows.length) }, () => null as any)];
+
   return (
     <div className="space-y-6">
       {/* 검색/요약 */}
@@ -333,7 +427,7 @@ export default function RealtimePage() {
               </div>
               <div className="col-span-12 md:col-span-6" />
 
-              {/* 조회구분 */}
+              {/* ① 조회구분 */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">조회구분</label>
                 <select value={조회구분} onChange={(e) => set조회구분(e.target.value as any)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -345,19 +439,19 @@ export default function RealtimePage() {
                 </select>
               </div>
 
-              {/* 기간 From */}
+              {/* ② 기간(From) */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">기간(From)</label>
                 <input type="date" value={기간From} onChange={(e) => set기간From(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
               </div>
 
-              {/* 기간 To */}
+              {/* ③ 기간(To) */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">기간(To)</label>
                 <input type="date" value={기간To} onChange={(e) => set기간To(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
               </div>
 
-              {/* 고객사 */}
+              {/* ④ 고객사 */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">고객사</label>
                 <select
@@ -372,7 +466,7 @@ export default function RealtimePage() {
                 </select>
               </div>
 
-              {/* 고객등급 */}
+              {/* ⑤ 고객등급 */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">고객등급</label>
                 <select value={고객등급} onChange={(e) => set고객등급(e.target.value as any)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -380,7 +474,7 @@ export default function RealtimePage() {
                 </select>
               </div>
 
-              {/* 수검자명 */}
+              {/* ⑥ 수검자명 */}
               <div className="col-span-12 md:col-span-8">
                 <label className="block text-xs text-slate-500 mb-1">검진대상자</label>
                 <input value={검진대상자} onChange={(e) => set검진대상자(e.target.value)} placeholder="수검자명 검색" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
@@ -391,7 +485,14 @@ export default function RealtimePage() {
           <aside className="col-span-1">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">진행 현황</h3>
-              <div className="text-sm font-semibold text-slate-900">{counts.totalAll.toLocaleString()}<span className="text-slate-500 text-xs"> 건</span></div>
+              <button
+                type="button"
+                onClick={() => clickSummary("전체")}
+                title="총건수 클릭 시 전체 보기"
+                className="text-sm font-semibold text-slate-900 hover:underline focus:outline-none cursor-pointer"
+              >
+                {counts.totalAll.toLocaleString()}<span className="text-slate-500 text-xs"> 건</span>
+              </button>
             </div>
             <ul className="mt-3 space-y-2">
               {STATUS_ORDER.map(s => (
@@ -450,70 +551,29 @@ export default function RealtimePage() {
           </div>
         </div>
 
-        {/* 테이블 */}
+        {/* 테이블: 칸별 테두리 + 열 고정 */}
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full table-fixed text-sm border border-slate-200">
             <thead className="bg-slate-50 text-slate-600">
-              <tr className="border-b">
-                <th className="px-3 py-3 w-10 text-center"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></th>
-                <th className="px-3 py-3 w-14 text-left">No</th>
-                <th className="px-3 py-3 text-left">고객사</th>
-                <th className="px-3 py-3 text-left">수검자명</th>
-                <th className="px-3 py-3 text-left">등급</th>
-                <th className="px-3 py-3 text-left">생년월일</th>
-                <th className="px-3 py-3 text-left">예약희망일</th>
-                <th className="px-3 py-3 text-left">예약확정일</th>
-                <th className="px-3 py-3 text-left">검진완료일</th>
-                <th className="px-3 py-3 text-left">예약상태</th>
-                <th className="px-3 py-3 text-left">패키지타입</th>
-                <th className="px-3 py-3 text-right">회사지원금</th>
-                <th className="px-3 py-3 text-right">본인부담금</th>
-                <th className="px-3 py-3 text-left">예약신청일</th>
+              <tr>
+                <th className="px-3 py-3 w-10 text-center border-b border-r last:border-r-0 border-slate-200"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></th>
+                <th className="px-3 py-3 w-14 text-left border-b border-r last:border-r-0 border-slate-200">No</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">고객사</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">수검자명</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">등급</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">생년월일</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">예약희망일</th>
+                <th className="px-3 py-3 text-left w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200">예약확정일</th>
+                <th className="px-3 py-3 text-left w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200">검진완료일</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">예약상태</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">패키지타입</th>
+                <th className="px-3 py-3 text-right border-b border-r last:border-r-0 border-slate-200">회사지원금</th>
+                <th className="px-3 py-3 text-right border-b border-r last:border-r-0 border-slate-200">본인부담금</th>
+                <th className="px-3 py-3 text-left border-b border-r last:border-r-0 border-slate-200">예약신청일</th>
               </tr>
             </thead>
             <tbody>
-              {pageRows.length === 0 && (
-                <tr><td colSpan={16} className="py-16 text-center text-slate-500">데이터가 없습니다.</td></tr>
-              )}
-              {pageRows.map((r, idx) => (
-                <tr key={r.id} onClick={() => handleRowClick(r)} className="border-b hover:bg-slate-50/80 cursor-pointer">
-                  <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleOne(r.id, e.target.checked)} />
-                  </td>
-                  <td className="px-3 py-2">{(page - 1) * pageSize + idx + 1}</td>
-                  <td className="px-3 py-2">{r.고객사}</td>
-                  <td className="px-3 py-2">{r.수검자명}</td>
-                  <td className="px-3 py-2">{r.등급}</td>
-                  <td className="px-3 py-2">{r.생년월일}</td>
-                  <td className="px-3 py-2">{r.예약희망일}</td>
-
-                  {/* 예약확정일 셀 */}
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    <DateCell
-                      value={r.예약확정일}
-                      placeholder="지정"
-                      onPick={(d) => quickPick(r, "CONFIRMED", d)}
-                      title="예약확정일 지정"
-                    />
-                  </td>
-
-                  {/* 검진완료일 셀 */}
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    <DateCell
-                      value={r.검진완료일}
-                      placeholder="지정"
-                      onPick={(d) => quickPick(r, "COMPLETED", d)}
-                      title="검진완료일 지정"
-                    />
-                  </td>
-
-                  <td className="px-3 py-2"><span className="inline-flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[r.예약상태]}`} />{r.예약상태}</span></td>
-                  <td className="px-3 py-2">{r.패키지타입}</td>
-                  <td className="px-3 py-2 text-right">{Number(r.회사지원금 || 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right">{Number(r.본인부담금 || 0).toLocaleString()}</td>
-                  <td className="px-3 py-2">{r.예약신청일}</td>
-                </tr>
-              ))}
+              {padded.map((r, i) => renderRow(r, i))}
             </tbody>
           </table>
         </div>
@@ -684,7 +744,7 @@ function DateCell({ value, placeholder, onPick, title }: { value?: string; place
     };
   }, []);
 
-  if (value) return <span className="text-slate-800">{value}</span>;
+  if (value) return <span className="inline-block w-32 text-slate-800">{value}</span>;
 
   return (
     <div className="relative inline-block" ref={boxRef}>
@@ -692,7 +752,7 @@ function DateCell({ value, placeholder, onPick, title }: { value?: string; place
         type="button"
         title={title}
         onClick={() => setOpen(v => !v)}
-        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs"
+        className="inline-flex items-center justify-center w-32 gap-1.5 px-2 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="#334155" strokeWidth="1.6"/><path d="M8 3v4M16 3v4M3 9h18" stroke="#334155" strokeWidth="1.6" strokeLinecap="round"/></svg>
         <span>{placeholder}</span>
@@ -734,7 +794,5 @@ const InfoRow = ({ label, value }: { label: string, value?: string | number }) =
     <div className="col-span-2 text-slate-800">{value || "-"}</div>
   </div>
 );
-
-
 
 

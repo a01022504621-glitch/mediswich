@@ -13,11 +13,9 @@
     <header class="header">
         <div class="container">
             <a href="#" class="logo scale-in" aria-label="??>
-                <picture class="logo-picture">
-                    <source srcset="logo-icon.svg" type="image/svg+xml">
-                    <source srcset="logo-icon.png" type="image/png">
+                <span class="logo-box">
                     <img src="logo.png" alt="MediSwich 로고" class="logo-img">
-                </picture>
+                </span>
             </a>
             <nav class="nav">
                 <a href="#value" class="nav-item fade-in-up delay-1">?�심 가�?/a>

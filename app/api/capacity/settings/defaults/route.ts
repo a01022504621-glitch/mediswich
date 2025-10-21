@@ -1,8 +1,9 @@
+// app/api/capacity/settings/defaults/route.ts
 import { NextResponse } from "next/server";
 
 type Settings = {
-  specials: string[]; // 특정검사 명칭 목록
-  defaults: { BASIC: number; NHIS: number; SPECIAL: number };
+  specials: string[]; // 특정검사 명칭 목록(표시용)
+  defaults: { BASIC: number; NHIS: number; SPECIAL: number }; // 기본 케파
   examDefaults: Record<string, number>; // examId -> 기본 케파
 };
 
@@ -28,15 +29,24 @@ export async function PUT(req: Request) {
   const body = await req.json().catch(() => ({}));
 
   if (body?.defaults) {
-    const { BASIC, NHIS, SPECIAL } = body.defaults;
-    if ([BASIC, NHIS, SPECIAL].every((n: any) => Number.isFinite(n)))
+    const BASIC = Number(body.defaults.BASIC);
+    const NHIS = Number(body.defaults.NHIS);
+    const SPECIAL = Number(body.defaults.SPECIAL);
+    if ([BASIC, NHIS, SPECIAL].every((n) => Number.isFinite(n) && n >= 0)) {
       S.defaults = { BASIC, NHIS, SPECIAL };
+    }
   }
+
+  if (Array.isArray(body?.specials)) {
+    S.specials = body.specials.map((x: any) => String(x)).filter(Boolean);
+  }
+
   if (body?.examDefaults && typeof body.examDefaults === "object") {
     S.examDefaults = Object.fromEntries(
       Object.entries(body.examDefaults).map(([k, v]) => [String(k), Number(v)])
     );
   }
+
   return NextResponse.json(S);
 }
 

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "RATE_LIMITED" }, { status: 429 });
     }
 
-    // 2) CSRF 검사(개발/비프로덕션 또는 AUTH_CSRF_DISABLED=1이면 생략)
+    // 2) CSRF 검사(프로덕션만)
     if (!CSRF_OFF) {
       const cookies = parseCookies(req.headers.get("cookie"));
       const headerToken = req.headers.get("x-csrf-token") || req.headers.get("x-xsrf-token") || "";
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3) 입력 파싱(슬러그는 더 이상 받지 않음)
+    // 3) 입력
     const body = await req.json().catch(() => ({}));
     const emailRaw = typeof body.email === "string" ? body.email : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -79,22 +79,18 @@ export async function POST(req: NextRequest) {
     }
     const email = emailRaw.trim().toLowerCase();
 
-    // 4) 사용자 조회(이메일로 단일 사용자 식별)
+    // 4) 사용자 조회
     const user = await prisma.user.findFirst({
       where: { email },
       select: { id: true, email: true, password: true, role: true, hospitalId: true },
     });
-    if (!user) {
-      return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
 
     // 5) 비밀번호 검증
     const passOk = await bcrypt.compare(password, user.password);
-    if (!passOk) {
-      return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
-    }
+    if (!passOk) return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
 
-    // 6) 병원 결정(사용자 소속으로만 결정)
+    // 6) 병원 확인
     if (!user.hospitalId) {
       return NextResponse.json({ ok: false, message: "USER_NOT_BOUND" }, { status: 409 });
     }
@@ -102,11 +98,9 @@ export async function POST(req: NextRequest) {
       where: { id: user.hospitalId },
       select: { id: true, slug: true },
     });
-    if (!hospital) {
-      return NextResponse.json({ ok: false, message: "HOSPITAL_NOT_FOUND" }, { status: 409 });
-    }
+    if (!hospital) return NextResponse.json({ ok: false, message: "HOSPITAL_NOT_FOUND" }, { status: 409 });
 
-    // 7) 세션 발급(병원 정보 포함)
+    // 7) 세션 발급
     const payload: {
       sub: string;
       role: typeof user.role;
@@ -118,8 +112,9 @@ export async function POST(req: NextRequest) {
       hospitalSlug: hospital.slug ?? String(hospital.id),
       hospitalId: hospital.id,
     };
-
     const token = await signSession(payload);
+
+    // 8) 응답 + 쿠키 세팅(세션 + 현재 병원 컨텍스트)
     const res = NextResponse.json({ ok: true });
 
     const sc = sessionCookie(token, SESSION_TTL_SEC);
@@ -128,6 +123,23 @@ export async function POST(req: NextRequest) {
     const expUnix = Math.floor(Date.now() / 1000) + SESSION_TTL_SEC;
     const ec = expCookie(expUnix);
     res.cookies.set(ec.name, ec.value, ec.options);
+
+    // ── 핵심: 관리자 컨텍스트 쿠키(시크릿 창도 즉시 동작)
+    const secure = process.env.NODE_ENV === "production";
+    res.cookies.set("current_hospital_id", hospital.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure,
+      maxAge: SESSION_TTL_SEC,
+    });
+    res.cookies.set("current_hospital_slug", hospital.slug ?? "", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure,
+      maxAge: SESSION_TTL_SEC,
+    });
 
     return res;
   } catch (e) {

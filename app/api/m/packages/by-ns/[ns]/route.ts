@@ -4,15 +4,29 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/guard";
+import { cookies, headers } from "next/headers";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 
 type Ns = "nhis" | "general" | "corp";
 const nsToCategory = (ns: Ns) => (ns === "nhis" ? "NHIS" : ns === "general" ? "GENERAL" : "CORP");
 
+async function resolveHid(session: any) {
+  const ck = cookies(); const hd = headers();
+  const c = ck.get("current_hospital_id")?.value || "";
+  if (c) return c;
+  const s = session?.hid || session?.hospitalId || "";
+  if (s) return s;
+  const slug = ck.get("r_tenant")?.value || "";
+  if (slug) { const t = await resolveTenantHybrid({ slug, host: hd.get("host") || undefined }); if (t?.id) return t.id; }
+  const t2 = await resolveTenantHybrid({ host: hd.get("host") || undefined });
+  return t2?.id || "";
+}
+
 export async function GET(_req: Request, { params }: { params: { ns: Ns } }) {
   try {
     const s = await requireSession();
-    const hospitalId = s.hid ?? (s as any)?.hospitalId;
-    if (!hospitalId) return NextResponse.json({ ok: false, items: [] }, { status: 401 });
+    const hospitalId = await resolveHid(s);
+    if (!hospitalId) return NextResponse.json({ ok: false, items: [], error: "hospital_not_selected" }, { status: 400 });
 
     const category = nsToCategory(params.ns);
     const items = await prisma.package.findMany({
@@ -29,8 +43,8 @@ export async function GET(_req: Request, { params }: { params: { ns: Ns } }) {
 export async function POST(req: Request, { params }: { params: { ns: Ns } }) {
   try {
     const s = await requireSession();
-    const hospitalId = s.hid ?? (s as any)?.hospitalId;
-    if (!hospitalId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const hospitalId = await resolveHid(s);
+    if (!hospitalId) return NextResponse.json({ ok: false, error: "hospital_not_selected" }, { status: 400 });
 
     const body = await req.json().catch(() => ({} as any));
     const data: any = {
@@ -38,13 +52,11 @@ export async function POST(req: Request, { params }: { params: { ns: Ns } }) {
       title: String(body.title ?? "").trim(),
       summary: body.summary ?? null,
       price: typeof body.price === "number" ? body.price : null,
-      tags: body && typeof body.tags === "object" ? body.tags : {}, // ← 객체만 저장
+      tags: body && typeof body.tags === "object" ? body.tags : {},
       visible: typeof body.visible === "boolean" ? body.visible : true,
       category: nsToCategory(params.ns),
     };
-    if (!data.title) {
-      return NextResponse.json({ ok: false, error: "title required" }, { status: 400 });
-    }
+    if (!data.title) return NextResponse.json({ ok: false, error: "title required" }, { status: 400 });
 
     if (params.ns === "corp") {
       let clientId: string | null = body.clientId ?? null;
@@ -52,10 +64,7 @@ export async function POST(req: Request, { params }: { params: { ns: Ns } }) {
         const rawCode = body.clientCode ?? body.code ?? body.client_code ?? body.corpCode ?? null;
         const clientCode = rawCode ? String(rawCode).trim() : "";
         if (clientCode) {
-          const found = await prisma.client.findFirst({
-            where: { hospitalId, code: { equals: clientCode } },
-            select: { id: true },
-          });
+          const found = await prisma.client.findFirst({ where: { hospitalId, code: { equals: clientCode } }, select: { id: true } });
           clientId = found?.id ?? null;
         }
       }
@@ -68,4 +77,5 @@ export async function POST(req: Request, { params }: { params: { ns: Ns } }) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 200 });
   }
 }
+
 

@@ -1,3 +1,4 @@
+// app/(m-protected)/m/org/capacity/ui/Calendar.client.tsx
 "use client";
 
 import Link from "next/link";
@@ -7,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 const addMonths = (d: Date, diff: number) => {
   const nd = new Date(d);
-  nd.setMonth(nd.getMonth() + diff);
+  nd.setMonth(d.getMonth() + diff);
   return nd;
 };
 const ymToDate = (ym: string) => new Date(`${ym}-01T00:00:00`);
@@ -20,36 +21,130 @@ const ymd = (d: Date) =>
 
 /* ───────── types ───────── */
 type YMD = `${number}-${number}-${number}`;
+type ClosedMap = Record<string, boolean>;
 type DayBox = {
-  cap: number;
-  used: number;
-  closed: { basic: boolean; egd: boolean; col: boolean };
+  cap: number;           // legacy per-day 기본 cap
+  used: number;          // legacy per-day 기본 used
+  closed: ClosedMap;
+  caps?: Record<string, number>;   // optional per-resource cap
+  usedBy?: Record<string, number>; // optional per-resource used
+};
+type SpecItem = { id: string; name: string };
+
+/* ───────── localStorage helpers ───────── */
+const hasWin = () => typeof window !== "undefined";
+const lsGet = (k: string) => {
+  try {
+    if (!hasWin()) return null;
+    return window.localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const lsSet = (k: string, v: string) => {
+  try {
+    if (!hasWin()) return;
+    window.localStorage.setItem(k, v);
+  } catch {}
 };
 
-/* ───────── fetch helper ───────── */
+/* ───────── server helpers ───────── */
 async function getCalendar(month: string) {
-  const r = await fetch(`/api/capacity/calendar?month=${month}`, {
-    cache: "no-store",
-  });
+  const r = await fetch(`/api/capacity/calendar?month=${month}`, { cache: "no-store" });
   const j = await r.json().catch(() => ({}));
-  // API: { ok, days: Record<YMD, DayBox> }
   const map = (j?.days ?? {}) as Record<YMD, DayBox>;
+  for (const iso of Object.keys(map)) {
+    const c = map[iso]?.closed ?? {};
+    map[iso].closed = { ...c, special: Boolean(c.special || c.col) };
+  }
   return map;
 }
 
-async function putClose(date: YMD, resource: "basic" | "egd" | "col", close: boolean) {
+async function getDefaults(): Promise<{
+  BASIC: number;
+  SPECIAL: number;
+  examDefaults: Record<string, number>;
+}> {
+  try {
+    const r = await fetch("/api/capacity/settings/defaults", { cache: "no-store" });
+    const j = await r.json();
+    return {
+      BASIC: Number(j?.defaults?.BASIC ?? 0),
+      SPECIAL: Number(j?.defaults?.SPECIAL ?? 0),
+      examDefaults: (j?.examDefaults ?? {}) as Record<string, number>,
+    };
+  } catch {
+    return { BASIC: 0, SPECIAL: 0, examDefaults: {} };
+  }
+}
+
+// 특수검진은 서버에 col로 저장(하위호환)
+async function putClose(date: YMD, resource: string, close: boolean) {
+  const mapped = resource === "special" ? "col" : resource;
   await fetch("/api/capacity/day", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date, resource, close }),
+    body: JSON.stringify({ date, resource: mapped, close }),
   });
+}
+
+async function getSpecOptions(): Promise<SpecItem[]> {
+  try {
+    const r = await fetch("/api/capacity/specials", { cache: "no-store" });
+    if (!r.ok) return [];
+    const j = await r.json();
+    const arr = Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : [];
+    return arr
+      .map((x: any) => ({
+        id: String(x.id ?? x.code ?? x.slug ?? x.name),
+        name: String(x.name ?? x.label ?? x.id),
+      }))
+      .filter((x: SpecItem) => x.id && x.name);
+  } catch {
+    return [];
+  }
+}
+
+/* ───────── helpers ───────── */
+function sundaysOfMonth(ym: string): YMD[] {
+  const base = ymToDate(ym);
+  const last = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  const out: YMD[] = [];
+  for (let d = 1; d <= last; d++) {
+    const dt = new Date(base.getFullYear(), base.getMonth(), d);
+    if (dt.getDay() === 0) out.push(ymd(dt) as YMD);
+  }
+  return out;
 }
 
 /* ───────── Calendar (admin) ───────── */
 export default function Calendar({ initialMonth }: { initialMonth: string }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [month, setMonth] = useState(initialMonth);
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState<Record<YMD, DayBox>>({});
+
+  // 설정 케파
+  const [capBasic, setCapBasic] = useState(0);
+  const [capSpecial, setCapSpecial] = useState(0);
+  const [capSpecs, setCapSpecs] = useState<Record<string, number>>({});
+
+  // 표시 토글
+  const [showSpecial, setShowSpecial] = useState<boolean>(() => lsGet("ms:cap:showSpecial") === "1");
+
+  const [specMenuOpen, setSpecMenuOpen] = useState(false);
+  const [specOptions, setSpecOptions] = useState<SpecItem[]>([]);
+  const [selectedSpecs, setSelectedSpecs] = useState<string[]>(() => {
+    const raw = lsGet("ms:cap:selectedSpecs");
+    try {
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  });
 
   const monthLabel = useMemo(() => formatMonthLabel(month), [month]);
 
@@ -57,14 +152,40 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
     setLoading(true);
     try {
       const map = await getCalendar(m);
+
+      // 일요일 자동 기본 마감 업서트
+      const sundays = sundaysOfMonth(m);
+      const need = sundays.filter((d) => !(map[d]?.closed?.basic));
+      if (need.length > 0) {
+        const next = structuredClone(map);
+        for (const d of need) {
+          const box = next[d] ?? { cap: 0, used: 0, closed: {} as ClosedMap }; // cap 0으로 둠
+          next[d] = { ...box, closed: { ...box.closed, basic: true } };
+        }
+        setDays(next);
+        Promise.all(need.map((d) => putClose(d, "basic", true))).catch(() => {});
+        return;
+      }
+
       setDays(map || {});
+
+      const hasSpecial = Object.values(map || {}).some((b) => b?.closed?.special);
+      if (hasSpecial) setShowSpecial(true);
     } finally {
       setLoading(false);
     }
   };
 
+  // 초기 로드
   useEffect(() => {
     void reload();
+    void (async () => {
+      const defs = await getDefaults();
+      setCapBasic(defs.BASIC || 0);
+      setCapSpecial(defs.SPECIAL || 0);
+      setCapSpecs(defs.examDefaults || {});
+    })();
+    void (async () => setSpecOptions(await getSpecOptions()))();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -73,48 +194,42 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
+  useEffect(() => {
+    lsSet("ms:cap:showSpecial", showSpecial ? "1" : "0");
+  }, [showSpecial]);
+  useEffect(() => {
+    lsSet("ms:cap:selectedSpecs", JSON.stringify(selectedSpecs));
+  }, [selectedSpecs]);
+
   const nav = (diff: number) => {
     const next = addMonths(ymToDate(month), diff);
     setMonth(`${next.getFullYear()}-${pad2(next.getMonth() + 1)}`);
   };
 
-  // 즉시 토글(낙관적 업데이트)
-  const toggle = async (date: YMD, key: "basic" | "egd" | "col") => {
+  const toggle = async (date: YMD, resource: string, nextClose: boolean) => {
     setDays((cur) => {
-      const box = cur[date] || { cap: 999, used: 0, closed: { basic: false, egd: false, col: false } };
-      const isFull = (box.used ?? 0) >= (box.cap ?? 0);
-      const now = !!box.closed[key];
-      const wantClose = !now; // 열려있으면 닫기, 닫혀있으면 열기
-      // FULL이면 오픈 불가
-      if (isFull && !wantClose) return cur;
-
+      const before = cur[date] ?? { cap: 0, used: 0, closed: {} as ClosedMap }; // cap 0
       const next = structuredClone(cur);
-      next[date] = {
-        ...box,
-        closed: { ...box.closed, [key]: wantClose },
-      };
-      // 기본을 닫으면 나머지도 잠금 표기(실제 반영은 Public API 쪽이 전체 CLOSED 처리)
-      if (key === "basic" && wantClose) {
-        next[date].closed.egd = true;
-        next[date].closed.col = true;
-      }
+      next[date] = { ...before, closed: { ...before.closed, [resource]: nextClose } };
       return next;
     });
-
     try {
-      const box = days[date];
-      const isFull = (box?.used ?? 0) >= (box?.cap ?? 0);
-      const now = !!box?.closed?.[key];
-      const wantClose = !now;
-      if (isFull && !wantClose) return;
-      await putClose(date, key, wantClose);
-      // 서버 상태 동기화
-      await reload();
+      await putClose(date, resource, nextClose);
     } catch {
-      // 실패 시 롤백 대신 전체 리로드
-      await reload();
+      setDays((cur) => {
+        const before = cur[date];
+        if (!before) return cur;
+        const prevClose = !nextClose;
+        const next = structuredClone(cur);
+        next[date] = { ...before, closed: { ...before.closed, [resource]: prevClose } };
+        return next;
+      });
     }
   };
+
+  if (!mounted) {
+    return <div className="h-[70vh] rounded-2xl border border-slate-200 bg-white" />;
+  }
 
   return (
     <div className="space-y-4">
@@ -139,6 +254,55 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSpecial((v) => !v)}
+            className={`rounded-full border px-3 py-1.5 text-sm shadow-sm ${
+              showSpecial
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+            title="특수검진 카드 표시/관리"
+          >
+            특수검진관리
+          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setSpecMenuOpen((v) => !v)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 shadow-sm"
+            >
+              특정검사관리
+            </button>
+            {specMenuOpen && (
+              <div
+                className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-20"
+                onMouseLeave={() => setSpecMenuOpen(false)}
+              >
+                <div className="max-h-72 overflow-auto space-y-1">
+                  {specOptions.length === 0 ? (
+                    <div className="p-3 text-sm text-slate-500">등록된 특정검사가 없습니다.</div>
+                  ) : (
+                    specOptions.map((opt) => (
+                      <label key={opt.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-sky-600"
+                          checked={selectedSpecs.includes(opt.id)}
+                          onChange={() =>
+                            setSelectedSpecs((cur) =>
+                              cur.includes(opt.id) ? cur.filter((x) => x !== opt.id) : [...cur, opt.id],
+                            )
+                          }
+                        />
+                        <span className="truncate">{opt.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <Link
             href="/m/org/capacity/defaults"
             className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 shadow-sm"
@@ -155,7 +319,17 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
       </div>
 
       {/* 캘린더 */}
-      <CalendarGrid month={month} loading={loading} days={days} onToggle={toggle} />
+      <CalendarGrid
+        month={month}
+        loading={loading}
+        days={days}
+        showSpecial={showSpecial}
+        selectedSpecs={selectedSpecs}
+        onToggle={toggle}
+        capBasic={capBasic}
+        capSpecial={capSpecial}
+        capSpecs={capSpecs}
+      />
     </div>
   );
 }
@@ -165,12 +339,22 @@ function CalendarGrid({
   loading,
   month,
   days,
+  showSpecial,
+  selectedSpecs,
   onToggle,
+  capBasic,
+  capSpecial,
+  capSpecs,
 }: {
   loading: boolean;
   month: string;
   days: Record<YMD, DayBox>;
-  onToggle: (date: YMD, key: "basic" | "egd" | "col") => void;
+  showSpecial: boolean;
+  selectedSpecs: string[];
+  onToggle: (date: YMD, resource: string, nextClose: boolean) => void;
+  capBasic: number;
+  capSpecial: number;
+  capSpecs: Record<string, number>;
 }) {
   const base = ymToDate(month);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -206,7 +390,17 @@ function CalendarGrid({
         <div className="grid grid-cols-7">
           {skeleton.map((iso, i) =>
             iso ? (
-              <DayCell key={iso} iso={iso} box={days[iso]} onToggle={onToggle} />
+              <DayCell
+                key={iso}
+                iso={iso}
+                box={days[iso]}
+                showSpecial={showSpecial}
+                selectedSpecs={selectedSpecs}
+                onToggle={onToggle}
+                capBasic={capBasic}
+                capSpecial={capSpecial}
+                capSpecs={capSpecs}
+              />
             ) : (
               <div key={`e-${i}`} className="min-h-[9.6rem] border-r border-b bg-white" />
             ),
@@ -221,33 +415,60 @@ function CalendarGrid({
 function DayCell({
   iso,
   box,
+  showSpecial,
+  selectedSpecs,
   onToggle,
+  capBasic,
+  capSpecial,
+  capSpecs,
 }: {
   iso: YMD;
   box?: DayBox;
-  onToggle: (date: YMD, key: "basic" | "egd" | "col") => void;
+  showSpecial: boolean;
+  selectedSpecs: string[];
+  onToggle: (date: YMD, resource: string, nextClose: boolean) => void;
+  capBasic: number;
+  capSpecial: number;
+  capSpecs: Record<string, number>;
 }) {
   const date = new Date(`${iso}T00:00:00`);
+  const wday = date.getDay();
   const today = new Date();
   const isToday =
     date.getFullYear() === today.getFullYear() &&
     date.getMonth() === today.getMonth() &&
     date.getDate() === today.getDate();
 
-  const cap = box?.cap ?? 999;
-  const used = box?.used ?? 0;
-  const closed = box?.closed ?? { basic: false, egd: false, col: false };
-  const isFull = used >= cap;
-  const basicClosed = !!closed.basic;
+  const closed: ClosedMap = { ...(box?.closed ?? {}) };
+  if (wday === 0 && closed.basic == null) closed.basic = true;
 
-  const row = (label: string, key: "basic" | "egd" | "col", opts?: { showCount?: boolean }) => {
-    const isClosed = !!closed[key];
-    const disabled = key !== "basic" && basicClosed; // 기본 닫힘 → 하위 잠금
-    const actionLabel = isFull
-      ? "FULL"
-      : isClosed
-      ? "오픈"
-      : "클로즈";
+  // cap 계산: 0, nullish, 900이상은 설정 케파로 대체
+  const pick = (v?: number, fallback = 0) => (v && v > 0 && v < 900 ? v : fallback);
+
+  const getCap = (res: string) => {
+    const byRes = box?.caps?.[res];
+    if (res === "basic") return pick(byRes ?? box?.cap, capBasic);
+    if (res === "special") return pick(byRes, capSpecial);
+    return pick(byRes, capSpecs[res.replace(/^spec:/, "")] ?? 0);
+  };
+
+  const getUsed = (res: string) =>
+    box?.usedBy?.[res] ?? (res === "basic" ? box?.used ?? 0 : 0);
+
+  const row = (label: string, resource: string) => {
+    const isClosed = !!closed[resource];
+    const isSpec = resource.startsWith("spec:");
+    const disabled = (resource !== "basic" && closed.basic) || isSpec;
+
+    const cap = Math.max(0, Number(getCap(resource) || 0));
+    const used = Math.max(0, Number(getUsed(resource) || 0));
+    const isFull = cap > 0 && used >= cap;
+
+    const actionLabel = isFull ? "FULL" : isClosed ? "해제" : "마감";
+    const onClick = () => {
+      if (disabled || isFull) return;
+      onToggle(iso, resource, !isClosed);
+    };
 
     return (
       <div
@@ -261,22 +482,19 @@ function DayCell({
       >
         <span className="shrink-0 font-medium text-slate-700">{label}</span>
 
-        {opts?.showCount && (
-          <span
-            className={`ml-auto tabular-nums ${
-              isFull ? "text-rose-600 font-semibold" : "text-slate-700"
-            }`}
-            title={isFull ? "수용 인원 도달" : undefined}
-          >
-            {used}/{cap}
-          </span>
-        )}
+        <span
+          className={`ml-auto tabular-nums ${
+            isFull ? "text-rose-600 font-semibold" : "text-slate-700"
+          }`}
+          title={isFull ? "수용 인원 도달" : undefined}
+        >
+          {used}/{cap}
+        </span>
 
-        {/* 오른쪽 끝 액션 버튼 */}
         <button
-          onClick={() => !disabled && !isFull && onToggle(iso, key)}
+          onClick={onClick}
           disabled={disabled || isFull}
-          className={`ml-auto shrink-0 px-1.5 py-0.5 rounded border text-[10px] ${
+          className={`shrink-0 px-1.5 py-0.5 rounded border text-[10px] ${
             isClosed
               ? "bg-rose-50 text-rose-700 border-rose-200"
               : "bg-white text-slate-600 border-slate-200"
@@ -288,41 +506,30 @@ function DayCell({
     );
   };
 
+  const showSpecialRow = showSpecial || closed.special === true;
+
   return (
     <div
       className={`min-h-[9.6rem] border-r border-b p-2 transition ${
-        isToday
-          ? "bg-indigo-50/70 ring-1 ring-inset ring-indigo-200"
-          : "bg-white hover:bg-slate-50/70"
+        isToday ? "bg-indigo-50/70 ring-1 ring-inset ring-indigo-200" : "bg-white hover:bg-slate-50/70"
       }`}
     >
       <div className="mb-1 flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-800">{date.getDate()}</div>
-        <Link
-          href={`/m/org/capacity/${iso}`}
-          className="text-[11px] text-slate-500 hover:text-slate-700"
-        >
+        <Link href={`/m/org/capacity/${iso}`} className="text-[11px] text-slate-500 hover:text-slate-700">
           더보기
         </Link>
       </div>
 
       <div className="space-y-1">
-        {row("기본", "basic", { showCount: true })}
-        {row("위내시경(EGD)", "egd")}
-        {row("대장내시경(COL)", "col")}
+        {row("기본", "basic")}
+        {showSpecialRow && row("특수검진", "special")}
+        {selectedSpecs.map((sid) => row(sid, `spec:${sid}`))}
 
-        {basicClosed && (
-          <div className="text-[11px] text-slate-500">
-            기본이 마감되어 하위 항목도 잠깁니다.
-          </div>
-        )}
-        {isFull && !basicClosed && (
-          <div className="text-[11px] text-rose-600">수용 인원 초과(FULL)</div>
-        )}
+        {closed.basic && <div className="text-[11px] text-slate-500">기본이 마감되어 하위 항목도 잠깁니다.</div>}
       </div>
     </div>
   );
 }
-
 
 

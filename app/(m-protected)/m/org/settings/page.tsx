@@ -1,8 +1,9 @@
 // app/(m-protected)/m/org/settings/page.tsx
-import { cookies } from "next/headers";
-import BasicInfo from "./_components/BasicInfo.client";
-import NoticeForm from "./_components/HospitalNoticeForm.client";
 import type { ReactNode } from "react";
+import BasicInfo from "./_components/BasicInfo.client";
+import PatientPageCustomizer from "./_components/PatientPageCustomizer.client";
+import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth";
 
 /** 공통 카드 */
 function SectionCard({
@@ -32,18 +33,25 @@ function SectionCard({
   );
 }
 
-export default function Page() {
-  const ck = cookies();
+export default async function Page() {
+  // 세션의 병원 ID 확보
+  const sess = await requireSession();
+  const hid = (sess as any)?.hospitalId || (sess as any)?.hid;
 
-  const hospitalName =
-    ck.get("hospitalName")?.value || ck.get("orgName")?.value || "검진센터";
+  // DB에서 읽기: 이름/슬러그는 읽기전용 표기
+  const hospital = hid
+    ? await prisma.hospital.findUnique({
+        where: { id: String(hid) },
+        select: { name: true, slug: true },
+      })
+    : null;
 
-  const slug =
-    ck.get("hospitalSlug")?.value || ck.get("orgSlug")?.value || "hihospital";
+  const hospitalName = hospital?.name ?? "검진센터";
+  const slug = hospital?.slug ?? "hihospital";
 
   return (
     <div className="space-y-6">
-      {/* 기본정보 */}
+      {/* 기본정보 (읽기 전용) */}
       <SectionCard
         title="기본정보"
         subtitle="병원명과 예약자페이지 주소는 계약 시 확정된 값입니다."
@@ -51,13 +59,13 @@ export default function Page() {
         <BasicInfo hospitalName={hospitalName} slug={slug} />
       </SectionCard>
 
-      {/* 공지/디자인 편집 + 우측 모바일 미리보기(컴포넌트 내부 포함) */}
+      {/* 공지/디자인 편집 + 우측 모바일 미리보기(휴대폰 목업 포함) */}
       <SectionCard
         title="병원 안내 공지 · 디자인"
         subtitle="예약자페이지 홈 공지 섹션. 템플릿과 색상을 선택하고 내용을 입력하세요."
         className="h-full"
       >
-        <NoticeForm />
+        <PatientPageCustomizer />
       </SectionCard>
     </div>
   );

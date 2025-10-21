@@ -60,8 +60,7 @@ export async function GET(req: NextRequest) {
       }
     } catch {}
 
-    // 조회구분에 따라 프론트가 추가 필터를 하므로
-    // 서버는 "예약희망일(date)" 또는 "예약신청일(createdAt)" 둘 중 하나라도 기간에 걸리면 포함
+    // 서버는 예약희망일(date) 또는 예약신청일(createdAt)이 기간에 걸리면 포함
     const rows = await prisma.booking.findMany({
       where: {
         hospitalId,
@@ -84,6 +83,45 @@ export async function GET(req: NextRequest) {
         package: { select: { title: true, category: true } },
       },
     });
+
+    // ── 핵심 추가: corpCode → 고객사명 보강 ─────────────────────────────
+    const codes = Array.from(
+      new Set(
+        rows
+          .map((r) => String((r.meta as any)?.corpCode || "").trim())
+          .filter((v) => v.length > 0),
+      ),
+    );
+
+    // prisma 모델명이 프로젝트마다 다를 수 있어 안전하게 탐색
+    const repo =
+      (prisma as any).client ||
+      (prisma as any).clients ||
+      (prisma as any).corpClient ||
+      (prisma as any).corp ||
+      (prisma as any).company ||
+      (prisma as any).customer ||
+      (prisma as any).orgClient;
+
+    let nameByCode = new Map<string, string>();
+    if (repo && codes.length) {
+      const found = await repo.findMany({
+        where: { hospitalId, code: { in: codes } },
+        select: { code: true, name: true },
+      });
+      nameByCode = new Map(found.map((c: any) => [String(c.code), String(c.name)]));
+    }
+
+    // 각 예약 meta에 corpName이 없고 corpCode가 있으면 이름 보강
+    for (const r of rows) {
+      const m: any = r.meta || {};
+      if (!m.corpName && m.corpCode && nameByCode.has(String(m.corpCode))) {
+        m.corpName = nameByCode.get(String(m.corpCode));
+        // mapBookingToRow가 읽을 수 있도록 meta에 반영
+        (r as any).meta = m;
+      }
+    }
+    // ───────────────────────────────────────────────────────────────
 
     const items = (rows as unknown as DBBooking[]).map(mapBookingToRow);
 

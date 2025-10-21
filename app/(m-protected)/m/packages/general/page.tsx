@@ -16,6 +16,8 @@ import {
   loadPackages,
   savePackages,
   publishPackages,
+  ensureHospitalScope,
+  loadPackagesDBFirst,
 } from "@/lib/examStore";
 
 /* ===== Types ===== */
@@ -47,8 +49,7 @@ type DraftPackage = {
 };
 
 /* ===== UI Utils ===== */
-const clsx = (...xs: (string | false | null | undefined)[]) =>
-  xs.filter(Boolean).join(" ");
+const clsx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(" ");
 const input =
   "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400";
 const inputSm =
@@ -57,14 +58,11 @@ const card = "bg-white shadow-sm rounded-2xl border border-gray-200";
 const subHead = "px-6 py-3 text-sm font-semibold text-gray-700 border-b";
 const body = "px-6 py-6";
 const btn = "px-3 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-50";
-const btnPrimary =
-  "px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:opacity-90";
+const btnPrimary = "px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:opacity-90";
 
 /* ===== Small Utils ===== */
-// 결정적 ID (카테고리|세부|검사명 기반)
 function stableId(category: string, detail: string, name: string) {
   const key = [category, detail, name].map((s) => (s || "").trim().toLowerCase()).join("|");
-  // 경량 FNV-like 해시 → base36
   let h = 2166136261 >>> 0;
   for (let i = 0; i < key.length; i++) {
     h ^= key.charCodeAt(i);
@@ -80,7 +78,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 500) {
   };
 }
 
-/* ===== Excel Loader (결정적 ID 사용) ===== */
+/* ===== Excel Loader ===== */
 async function loadExcel(): Promise<Exam[]> {
   const XLSX = await import("xlsx");
   const res = await fetch("/list.xlsx", { cache: "no-store" });
@@ -100,7 +98,7 @@ async function loadExcel(): Promise<Exam[]> {
   return rows.map(toExam).filter(Boolean) as Exam[];
 }
 
-/* ===== Packages Grid (list) ===== */
+/* ===== Packages Grid ===== */
 function PackagesGrid({
   items,
   onAdd,
@@ -126,9 +124,7 @@ function PackagesGrid({
           </button>
         </div>
         {items.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">
-            아직 등록된 패키지가 없습니다.
-          </div>
+          <div className="py-10 text-center text-sm text-gray-400">아직 등록된 패키지가 없습니다.</div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((p) => {
@@ -140,10 +136,7 @@ function PackagesGrid({
                 0
               );
               return (
-                <div
-                  key={p.id}
-                  className="rounded-xl border p-4 shadow-sm flex flex-col gap-3"
-                >
+                <div key={p.id} className="rounded-xl border p-4 shadow-sm flex flex-col gap-3">
                   <div className="flex items-center gap-2">
                     <div className="text-base font-semibold truncate">{p.name}</div>
                     <span
@@ -161,18 +154,10 @@ function PackagesGrid({
                     {p.from || "-"} ~ {p.to || "-"}
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-md">
-                      기본 {baseCount}
-                    </span>
-                    <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">
-                      선택묶음 {optionGroups}
-                    </span>
-                    <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">
-                      필수합 {chooseSum}
-                    </span>
-                    <span className="ml-auto font-medium">
-                      {(p.price || 0).toLocaleString()}원
-                    </span>
+                    <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-md">기본 {baseCount}</span>
+                    <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">선택묶음 {optionGroups}</span>
+                    <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">필수합 {chooseSum}</span>
+                    <span className="ml-auto font-medium">{(p.price || 0).toLocaleString()}원</span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t">
                     <label className="flex items-center gap-2 text-sm">
@@ -256,7 +241,7 @@ export default function GeneralPackagesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 신규 드래프트(종합검진: 기본 + 선택 A)
+  // 신규 드래프트
   const makeBlank = (): DraftPackage => ({
     id: `pkg_${Date.now()}`,
     name: "종합검진 패키지(예시)",
@@ -273,10 +258,33 @@ export default function GeneralPackagesPage() {
     showInBooking: true,
   });
 
-  const [packages, setPackages] = useState<DraftPackage[]>(() => loadPackages(NS));
+  // DB 우선 로드
+  const [packages, setPackages] = useState<DraftPackage[]>([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      await ensureHospitalScope();
+      const list = (await loadPackagesDBFirst(NS)) as DraftPackage[];
+      if (!alive) return;
+      setPackages(list);
+      // 보조 캐시 갱신
+      savePackages(NS, list);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const refreshFromDB = useCallback(async () => {
+    const list = (await loadPackagesDBFirst(NS)) as DraftPackage[];
+    setPackages(list);
+    savePackages(NS, list);
+  }, []);
+
   const saveList = (next: DraftPackage[]) => {
     setPackages(next);
-    savePackages(NS, next); // 로컬 저장만
+    // 로컬 캐시(보조)
+    savePackages(NS, next);
   };
 
   const [mode, setMode] = useState<"list" | "edit">("list");
@@ -349,7 +357,7 @@ export default function GeneralPackagesPage() {
     if (activeGroup === gid) setActiveGroup("base");
   };
 
-  // 소유 맵(한 항목은 한 그룹에만)
+  // 소유 맵
   const ownerRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     const m = new Map<string, string>();
@@ -394,9 +402,7 @@ export default function GeneralPackagesPage() {
       ...prev,
       groups: {
         ...prev.groups,
-        [gid]: (prev.groups[gid] || []).map((r) =>
-          r.examId === examId ? { ...r, ...patch } : r
-        ),
+        [gid]: (prev.groups[gid] || []).map((r) => (r.examId === examId ? { ...r, ...patch } : r)),
       },
     }));
 
@@ -429,8 +435,7 @@ export default function GeneralPackagesPage() {
   // 검증/저장
   const isValid = useMemo(() => {
     if (!draft.from || !draft.to) return false;
-    for (const gid of draft.groupOrder)
-      if ((draft.groups[gid]?.length || 0) === 0) return false;
+    for (const gid of draft.groupOrder) if ((draft.groups[gid]?.length || 0) === 0) return false;
     return true;
   }, [draft]);
 
@@ -440,15 +445,15 @@ export default function GeneralPackagesPage() {
     const idx = next.findIndex((p) => p.id === draft.id);
     if (idx === -1) next.unshift(draft);
     else next[idx] = draft;
-    saveList(next);                  // 로컬 저장
-    await publishPackages(NS, next); // 이때만 서버 반영
+    saveList(next);                  // 로컬 보조 캐시
+    await publishPackages(NS, next); // 서버 반영
+    await refreshFromDB();           // DB 재조회로 단말 간 일관성 확보
     saveCodes(codes);
     setMode("list");
   };
 
   /* ===== Render ===== */
 
-  // 목록
   if (mode === "list") {
     return (
       <div className="p-5 md:p-8 space-y-6">
@@ -480,20 +485,21 @@ export default function GeneralPackagesPage() {
             cp.name = `${src.name} 복제`;
             const next = [cp, ...packages];
             saveList(next);
-            await publishPackages(NS, next); // 즉시 반영
+            await publishPackages(NS, next);
+            await refreshFromDB();
           }}
           onDelete={async (id) => {
             if (!confirm("해당 패키지를 삭제하시겠습니까?")) return;
             const next = packages.filter((x) => x.id !== id);
             saveList(next);
             await publishPackages(NS, next);
+            await refreshFromDB();
           }}
           onToggleShow={async (id, v) => {
-            const next = packages.map((p) =>
-              p.id === id ? { ...p, showInBooking: v } : p
-            );
+            const next = packages.map((p) => (p.id === id ? { ...p, showInBooking: v } : p));
             saveList(next);
             await publishPackages(NS, next);
+            await refreshFromDB();
           }}
         />
       </div>
@@ -513,9 +519,7 @@ export default function GeneralPackagesPage() {
               type="checkbox"
               className="accent-sky-600 scale-110"
               checked={draft.showInBooking}
-              onChange={(e) =>
-                setDraft({ ...draft, showInBooking: e.target.checked })
-              }
+              onChange={(e) => setDraft({ ...draft, showInBooking: e.target.checked })}
             />
             예약자페이지 노출
           </label>
@@ -523,10 +527,7 @@ export default function GeneralPackagesPage() {
             목록으로
           </button>
           <button
-            className={clsx(
-              btnPrimary,
-              !isValid && "opacity-50 cursor-not-allowed"
-            )}
+            className={clsx(btnPrimary, !isValid && "opacity-50 cursor-not-allowed")}
             onClick={saveDraft}
             disabled={!isValid}
           >
@@ -540,9 +541,7 @@ export default function GeneralPackagesPage() {
         <div className={subHead}>패키지 기본 정보</div>
         <div className={body + " grid grid-cols-1 md:grid-cols-6 gap-4"}>
           <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              패키지명
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">패키지명</label>
             <input
               className={input}
               value={draft.name}
@@ -550,9 +549,7 @@ export default function GeneralPackagesPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              표시 금액
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">표시 금액</label>
             <input
               className={clsx(input, "text-right")}
               inputMode="numeric"
@@ -566,9 +563,7 @@ export default function GeneralPackagesPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              유효 시작일
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">유효 시작일</label>
             <input
               type="date"
               className={input}
@@ -577,9 +572,7 @@ export default function GeneralPackagesPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              유효 종료일
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">유효 종료일</label>
             <input
               type="date"
               className={input}
@@ -603,9 +596,7 @@ export default function GeneralPackagesPage() {
                   onClick={() => setCat(c)}
                   className={clsx(
                     "px-3 py-1.5 rounded-full text-xs border transition",
-                    c === cat
-                      ? "bg-sky-600 text-white border-sky-600 shadow-sm"
-                      : "border-gray-300 hover:bg-gray-50"
+                    c === cat ? "bg-sky-600 text-white border-sky-600 shadow-sm" : "border-gray-300 hover:bg-gray-50"
                   )}
                 >
                   {c}
@@ -620,12 +611,8 @@ export default function GeneralPackagesPage() {
               />
             </div>
 
-            {loading && (
-              <div className="text-gray-500 text-sm">엑셀을 불러오는 중…</div>
-            )}
-            {excelErr && (
-              <div className="text-red-600 text-sm">엑셀 오류: {excelErr}</div>
-            )}
+            {loading && <div className="text-gray-500 text-sm">엑셀을 불러오는 중…</div>}
+            {excelErr && <div className="text-red-600 text-sm">엑셀 오류: {excelErr}</div>}
 
             <div className="max-h-[65vh] overflow-y-auto pr-1">
               {filtered.map((e) => {
@@ -635,15 +622,10 @@ export default function GeneralPackagesPage() {
                     key={e.id}
                     className={clsx(
                       "w-full rounded-lg border px-3 py-2 mb-2 transition flex items-center gap-2",
-                      selected
-                        ? "border-emerald-300 bg-emerald-50/60"
-                        : "border-gray-200"
+                      selected ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200"
                     )}
                   >
-                    <button
-                      className="flex-1 text-left hover:opacity-80"
-                      onClick={() => toggleExam(e.id)}
-                    >
+                    <button className="flex-1 text-left hover:opacity-80" onClick={() => toggleExam(e.id)}>
                       <div className="truncate text-sm">{e.name}</div>
                     </button>
                     <div className="flex items-center gap-1">
@@ -668,9 +650,7 @@ export default function GeneralPackagesPage() {
             <button
               className={clsx(
                 "px-3 py-1.5 rounded-full text-sm border",
-                activeTab === "builder"
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "hover:bg-gray-50"
+                activeTab === "builder" ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50"
               )}
               onClick={() => setActiveTab("builder")}
             >
@@ -679,9 +659,7 @@ export default function GeneralPackagesPage() {
             <button
               className={clsx(
                 "px-3 py-1.5 rounded-full text-sm border",
-                activeTab === "addons"
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "hover:bg-gray-50"
+                activeTab === "addons" ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50"
               )}
               onClick={() => setActiveTab("addons")}
             >
@@ -728,12 +706,7 @@ export default function GeneralPackagesPage() {
                         min={0}
                         className={clsx(inputSm, "w-[70px]")}
                         value={meta(activeGroup).chooseCount ?? 1}
-                        onChange={(e) =>
-                          setChooseCount(
-                            activeGroup,
-                            parseInt(e.target.value || "0", 10)
-                          )
-                        }
+                        onChange={(e) => setChooseCount(activeGroup, parseInt(e.target.value || "0", 10))}
                       />
                       <span className="text-gray-600">개</span>
                     </div>
@@ -757,10 +730,7 @@ export default function GeneralPackagesPage() {
               <div className="px-6 mt-4">
                 <div
                   className="text-[11px] text-gray-500 grid items-center gap-2 mb-2"
-                  style={{
-                    gridTemplateColumns:
-                      "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px",
-                  }}
+                  style={{ gridTemplateColumns: "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px" }}
                 >
                   <span>검사명</span>
                   <span>성별</span>
@@ -781,22 +751,13 @@ export default function GeneralPackagesPage() {
                       <div
                         key={row.examId}
                         className="rounded-lg border border-gray-200 px-3 py-2 grid items-center gap-2 min-h-[40px]"
-                        style={{
-                          gridTemplateColumns:
-                            "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px",
-                        }}
+                        style={{ gridTemplateColumns: "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px" }}
                       >
-                        <div className="truncate font-medium pr-2">
-                          {row.name || "검사명"}
-                        </div>
+                        <div className="truncate font-medium pr-2">{row.name || "검사명"}</div>
                         <select
                           className={inputSm}
                           value={row.sex}
-                          onChange={(e) =>
-                            updateRow(activeGroup, row.examId, {
-                              sex: e.target.value as Sex,
-                            })
-                          }
+                          onChange={(e) => updateRow(activeGroup, row.examId, { sex: e.target.value as Sex })}
                         >
                           <option value="A">전체</option>
                           <option value="M">남</option>
@@ -806,11 +767,7 @@ export default function GeneralPackagesPage() {
                           className={inputSm}
                           placeholder="비고"
                           value={row.memo || ""}
-                          onChange={(e) =>
-                            updateRow(activeGroup, row.examId, {
-                              memo: e.target.value,
-                            })
-                          }
+                          onChange={(e) => updateRow(activeGroup, row.examId, { memo: e.target.value })}
                         />
                         <input
                           className={inputSm}
@@ -818,10 +775,7 @@ export default function GeneralPackagesPage() {
                           value={row.code || ""}
                           onChange={(e) => setCode(row.examId, e.target.value)}
                         />
-                        <button
-                          className="text-xs text-gray-500 hover:text-gray-900 px-2"
-                          onClick={() => toggleExam(row.examId)}
-                        >
+                        <button className="text-xs text-gray-500 hover:text-gray-900 px-2" onClick={() => toggleExam(row.examId)}>
                           삭제
                         </button>
                       </div>
@@ -835,35 +789,21 @@ export default function GeneralPackagesPage() {
             <div className="p-6 space-y-4">
               <div className="flex items-end gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    항목명
-                  </label>
-                  <input
-                    className={input}
-                    value={addonName}
-                    onChange={(e) => setAddonName(e.target.value)}
-                  />
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">항목명</label>
+                  <input className={input} value={addonName} onChange={(e) => setAddonName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    성별
-                  </label>
-                  <select
-                    className={inputSm}
-                    value={addonSex}
-                    onChange={(e) => setAddonSex(e.target.value as any)}
-                  >
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">성별</label>
+                  <select className={inputSm} value={addonSex} onChange={(e) => setAddonSex(e.target.value as any)}>
                     <option value="ALL">전체</option>
                     <option value="M">남</option>
                     <option value="F">여</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    비용(원)
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">비용(원)</label>
                   <input
-                    className={clsx(inputSm, "w-[140px] text-right")}
+                    className={clsx(inputSm, "w-[140px] text-right]")}
                     inputMode="numeric"
                     value={addonPrice}
                     onChange={(e) => setAddonPrice(e.target.value)}
@@ -882,27 +822,15 @@ export default function GeneralPackagesPage() {
                   <div className="col-span-1"></div>
                 </div>
                 {draft.addons.length === 0 ? (
-                  <div className="px-3 py-6 text-sm text-gray-400">
-                    등록된 추가검사가 없습니다.
-                  </div>
+                  <div className="px-3 py-6 text-sm text-gray-400">등록된 추가검사가 없습니다.</div>
                 ) : (
                   draft.addons.map((a, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-12 gap-0 items-center px-3 py-2 border-t text-sm"
-                    >
+                    <div key={i} className="grid grid-cols-12 gap-0 items-center px-3 py-2 border-t text-sm">
                       <div className="col-span-7">{a.name}</div>
-                      <div className="col-span-2">
-                        {a.sex === "ALL" ? "전체" : a.sex === "M" ? "남" : "여"}
-                      </div>
-                      <div className="col-span-2 text-right">
-                        {(a.price || 0).toLocaleString()}원
-                      </div>
+                      <div className="col-span-2">{a.sex === "ALL" ? "전체" : a.sex === "M" ? "남" : "여"}</div>
+                      <div className="col-span-2 text-right">{(a.price || 0).toLocaleString()}원</div>
                       <div className="col-span-1 text-right">
-                        <button
-                          className="text-xs text-gray-500 hover:text-red-600"
-                          onClick={() => removeAddon(i)}
-                        >
+                        <button className="text-xs text-gray-500 hover:text-red-600" onClick={() => removeAddon(i)}>
                           삭제
                         </button>
                       </div>
@@ -917,5 +845,6 @@ export default function GeneralPackagesPage() {
     </div>
   );
 }
+
 
 

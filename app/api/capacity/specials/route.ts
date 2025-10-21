@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 type Special = { id: string; name: string };
 type Store = { specials: Special[] };
 
+// 전역 메모리 저장소. 하드코딩 없음.
 function ensure(): Store {
   const g = globalThis as any;
   if (!g.__capacitySpecials || !Array.isArray(g.__capacitySpecials.specials)) {
@@ -16,10 +17,8 @@ export async function GET() {
   return NextResponse.json({ items: S.specials });
 }
 
-/** PUT body
- *  - { set: Special[] }     // 전체 교체
- *  - { add: Special }       // 1건 추가
- *  - { removeIds: string[] }  // 여러 건 삭제
+/** PUT body 예시
+ * { set: Special[] } | { add: Special } | { removeIds: string[] }
  */
 export async function PUT(req: Request) {
   const S = ensure();
@@ -29,8 +28,7 @@ export async function PUT(req: Request) {
     x && typeof x.id === "string" && typeof x.name === "string" ? { id: x.id, name: x.name } : null;
 
   if (Array.isArray(body.set)) {
-    const arr = body.set.map(norm).filter(Boolean) as Special[];
-    S.specials = arr;
+    S.specials = body.set.map(norm).filter(Boolean) as Special[];
   } else if (body.add) {
     const v = norm(body.add);
     if (v && !S.specials.some((s) => s.id === v.id)) S.specials.push(v);
@@ -41,5 +39,6 @@ export async function PUT(req: Request) {
 
   return NextResponse.json({ items: S.specials });
 }
+
 
 

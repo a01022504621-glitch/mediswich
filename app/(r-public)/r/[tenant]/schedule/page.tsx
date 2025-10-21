@@ -1,8 +1,10 @@
+// app/(r-public)/r/[tenant]/schedule/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+/* ---- util ---- */
 function cx(...xs: (string | false | null | undefined)[]) {
   return xs.filter(Boolean).join(" ");
 }
@@ -46,7 +48,9 @@ type PackagePayload = {
   basicExams: string[];
   optionGroups: PackageGroup[];
 };
-type CapacityMonth = Record<string, "OPEN" | "FULL" | "CLOSED">;
+
+/* 월 캘린더 상태: 사용자 기준으로 계산된 OPEN/CLOSED */
+type CapacityMonth = Record<string, "OPEN" | "CLOSED">;
 type Slot = { time: string; status: "OPEN" | "CLOSED" | "FULL" };
 
 type Addon = {
@@ -66,14 +70,17 @@ const groupIdOf = (g: PackageGroup, idx: number) => {
   return cand && cand.length ? cand : `grp_${idx}`;
 };
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
 function fmtYMD(d: Date) {
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+  return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`;
 }
 function ymdKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 function yyyymm(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${d.getMonth() + 1}`;
 }
 function addMonths(d: Date, n: number) {
   const r = new Date(d);
@@ -121,11 +128,13 @@ function buildCalendar(cursor: Date) {
 /* 검사코드 유효성 */
 const isValidExamCode = (v: any) => /^[A-Za-z]{1,5}\d{2,6}$/i.test(String(v ?? "").trim());
 
+/* ---- Page ---- */
 export default function Page({ params }: { params: { tenant: string } }) {
   const router = useRouter();
   const sp = useSearchParams();
   const packageId = sp.get("packageId") || sp.get("id") || "";
   const corpCode = sp.get("code") || undefined;
+  const corpNameQ = sp.get("corpName") || undefined;
 
   const [stepIndex, setStepIndex] = useState(0);
   const stepKey: StepKey = STEPS[stepIndex].key;
@@ -168,10 +177,34 @@ export default function Page({ params }: { params: { tenant: string } }) {
     fetchAddons(params.tenant).then(setAddons).catch(() => setAddons([]));
   }, [params.tenant]);
 
+  /* 사용자 필요 리소스 플래그 */
+  const endoscopyFlags = useMemo(() => {
+    const { groups } = filteredGroups();
+    const selectedKeys = form.examSelected || {};
+    const selectedNames: string[] = [];
+    groups.forEach((g, gi) => {
+      const gid = groupIdOf(g, gi);
+      const keys = new Set(selectedKeys[gid] || []);
+      (g.items || []).forEach((it, xi) => {
+        const key = itemKeyFrom(it, xi);
+        if (keys.has(key)) selectedNames.push(it.name || "");
+      });
+    });
+    const hasEGD = selectedNames.some((n) => /위\s*내시경/i.test(n));
+    const hasColo = selectedNames.some((n) => /대장\s*내시경/i.test(n));
+    return { hasEGD, hasColo, any: hasEGD || hasColo };
+  }, [form.examSelected, form.sex, pkg]);
+
+  /* 달력 상태 로딩: 표시 월 기준 + 사용자 리소스 반영 */
+  const loadMonth = (ym: string) =>
+    fetchCapacityMonthSmart(params.tenant, ym, { needEGD: endoscopyFlags.hasEGD, needCol: endoscopyFlags.hasColo })
+      .then(setMonthMap)
+      .catch(() => setMonthMap({}));
+
   useEffect(() => {
     if (stepKey !== "date") return;
-    fetchCapacityMonth(params.tenant, yyyymm(form.date)).then(setMonthMap).catch(() => setMonthMap({}));
-  }, [stepKey, params.tenant, form.date]);
+    loadMonth(yyyymm(form.date));
+  }, [stepKey, params.tenant, form.date, endoscopyFlags.hasEGD, endoscopyFlags.hasColo]); // eslint-disable-line
 
   useEffect(() => {
     if (stepKey !== "date") return;
@@ -232,7 +265,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
     if (k === "info") {
       const phoneOk = /^010-\d{3,4}-\d{4}$/.test(form.phone);
       const birthOk = /^\d{6}-\d$/.test(form.birth7);
-      return form.name && phoneOk && birthOk && form.postal && form.address1 && form.address2; // 상세주소 필수
+      return form.name && phoneOk && birthOk && form.postal && form.address1 && form.address2;
     }
     if (k === "exam") {
       const groups = filteredGroups().groups;
@@ -267,50 +300,48 @@ export default function Page({ params }: { params: { tenant: string } }) {
   }
 
   const [showSheet, setShowSheet] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+
   function openSummary() {
     setShowSheet(true);
   }
+
   async function submitBooking() {
-    const ok = await createBooking(buildBookingPayload(params.tenant, packageId, pkg, form));
-    if (ok) {
+    if (submitBusy) return;
+    setSubmitBusy(true);
+    const payload = buildBookingPayload(params.tenant, packageId, pkg, form, {
+      corpCode: corpCode || undefined,
+      corpName: corpNameQ || undefined,
+    });
+    const r = await createBooking(payload);
+    if (r.ok) {
       setShowSheet(false);
-      alert(t("예약신청이 접수되었습니다.", "Request submitted."));
-      router.back();
-    } else alert(t("오류가 발생했습니다. 잠시 후 다시 시도해주세요.", "Error. Try again."));
+      alert("예약신청이 완료되었습니다.");
+      router.replace(`/r/${params.tenant}`);
+    } else {
+      setSubmitBusy(false);
+      alert(r.msg || t("오류가 발생했습니다. 잠시 후 다시 시도해주세요.", "Error. Try again."));
+    }
   }
 
-  const endoscopyFlags = useMemo(() => {
-    const { groups } = filteredGroups();
-    const selectedKeys = form.examSelected || {};
-    const selectedNames: string[] = [];
-    groups.forEach((g, gi) => {
-      const gid = groupIdOf(g, gi);
-      const keys = new Set(selectedKeys[gid] || []);
-      (g.items || []).forEach((it, xi) => {
-        const key = itemKeyFrom(it, xi);
-        if (keys.has(key)) selectedNames.push(it.name || "");
-      });
-    });
-    const hasEGD = selectedNames.some((n) => /위\s*내시경/i.test(n));
-    const hasColo = selectedNames.some((n) => /대장\s*내시경/i.test(n));
-    return { hasEGD, hasColo, any: hasEGD || hasColo };
-  }, [form.examSelected, form.sex, pkg]);
+  /* 상단 배너: 기업 코드/이름 */
+  const showCorpBanner = Boolean(corpCode || corpNameQ);
 
   return (
-    <div className={cx("min-h[100dvh]", tone.bg)}>
+    <div className={cx("min-h-[100dvh]", tone.bg)}>
       <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/95 border-b border-slate-200">
         <div className="mx-auto w-full max-w-[640px] px-5 py-3">
           <div className="flex items-center justify-between">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold tracking-wide text-slate-500">{params.tenant}</div>
-              <h1 className="text-base font-bold leading-tight">{t("검진 예약", "Check-up Reservation")}</h1>
+              <h1 className="text-base font-bold leading-tight">검진 예약</h1>
             </div>
             <button
               onClick={() => router.back()}
               className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-50 active:scale-[0.98] transition"
               aria-label="close"
             >
-              {t("닫기", "Close")}
+              닫기
             </button>
           </div>
         </div>
@@ -318,6 +349,15 @@ export default function Page({ params }: { params: { tenant: string } }) {
       </header>
 
       <main className="mx-auto w-full max-w-[640px] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+180px)]">
+        {showCorpBanner && (
+          <section className={cx("rounded-3xl p-4 mb-3", tone.card, tone.line)}>
+            <div className="text-[12px] text-slate-600">기업/단체</div>
+            <div className="text-sm font-semibold mt-0.5">
+              {(corpNameQ || "기업코드") + (corpCode ? ` (${corpCode})` : "")}
+            </div>
+          </section>
+        )}
+
         {STEPS[stepIndex].key === "terms" && <StepTerms form={form} setForm={setForm} t={t} />}
         {STEPS[stepIndex].key === "info" && (
           <StepInfo form={form} setForm={setForm} setBirthMasked={setBirthMasked} setPhoneMasked={setPhoneMasked} t={t} />
@@ -336,24 +376,32 @@ export default function Page({ params }: { params: { tenant: string } }) {
             t={t}
           />
         )}
-        {STEPS[stepIndex].key === "date" && <StepDate form={form} setForm={setForm} monthMap={monthMap} slots={slots} t={t} />}
+        {STEPS[stepIndex].key === "date" && (
+          <StepDate
+            form={form}
+            setForm={setForm}
+            monthMap={monthMap}
+            slots={slots}
+            t={t}
+            onMonthChange={(ym) => loadMonth(ym)}
+          />
+        )}
       </main>
 
       <footer className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-[640px] px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
           {STEPS[stepIndex].key === "exam" && (
             <div className="w-full mb-3 rounded-2xl px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold">
-              {t("당일 결제 비용", "Pay at hospital")}
-              <span className="float-right">{payToday.toLocaleString()}원</span>
+              당일 결제 비용 <span className="float-right">{payToday.toLocaleString()}원</span>
             </div>
           )}
           <div className="flex gap-2">
             <button
               onClick={goPrev}
               className="h-12 flex-1 rounded-2xl border border-slate-200 bg-white text-slate-700 font-medium active:scale-[0.99] disabled:opacity-40"
-              disabled={stepIndex === 0}
+              disabled={stepIndex === 0 || submitBusy}
             >
-              {t("이전", "Back")}
+              이전
             </button>
             <button
               onClick={goNext}
@@ -362,35 +410,38 @@ export default function Page({ params }: { params: { tenant: string } }) {
                 canNext ? tone.brand : "bg-slate-300 text-white",
                 canNext && tone.brandHover
               )}
-              disabled={!canNext}
+              disabled={!canNext || submitBusy}
             >
-              {stepIndex < 3 ? t("다음", "Next") : t("예약신청", "Submit")}
+              {stepIndex < 3 ? "다음" : "예약신청"}
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-slate-500 text-center">
-            {t("진행 단계", "Step")} {stepIndex + 1} / 4
-          </p>
+          <p className="mt-2 text-[11px] text-slate-500 text-center">진행 단계 {stepIndex + 1} / 4</p>
         </div>
       </footer>
 
       {showSheet && (
-        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setShowSheet(false)}>
+        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => !submitBusy && setShowSheet(false)}>
           <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-[640px] rounded-t-3xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold mb-3">{t("예약 요약", "Summary")}</h3>
+            <h3 className="text-base font-semibold mb-3">예약 요약</h3>
             <div className="space-y-2">
-              <Row k={t("이름", "Name")} v={form.name || "-"} />
-              <Row k={t("연락처", "Phone")} v={form.phone} />
-              <Row k={t("생년월일", "Birth")} v={form.birth7} />
-              <Row k={t("성별", "Sex")} v={form.sex || "-"} />
-              <Row k={t("주소", "Address")} v={`(${form.postal}) ${form.address1} ${form.address2 || ""}`} />
-              <Row k={t("날짜/시간", "Date/Time")} v={`${fmtYMD(form.date)} ${form.time}`} />
+              <Row key="name" k="이름" v={form.name || "-"} />
+              <Row key="phone" k="연락처" v={form.phone} />
+              <Row key="birth" k="생년월일" v={form.birth7} />
+              <Row key="sex" k="성별" v={form.sex || "-"} />
+              <Row key="addr" k="주소" v={`(${form.postal}) ${form.address1} ${form.address2 || ""}`} />
+              <Row key="dt" k="날짜/시간" v={`${fmtYMD(form.date)} ${form.time}`} />
+              {showCorpBanner && <Row key="corp" k="고객사" v={`${corpNameQ || ""}${corpCode ? ` (${corpCode})` : ""}`} />}
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="h-12 rounded-2xl border border-slate-200" onClick={() => setShowSheet(false)}>
-                {t("취소", "Cancel")}
+              <button className="h-12 rounded-2xl border border-slate-200" onClick={() => !submitBusy && setShowSheet(false)} disabled={submitBusy}>
+                취소
               </button>
-              <button className={cx("h-12 rounded-2xl font-semibold", tone.brand, tone.brandHover)} onClick={submitBooking}>
-                {t("예약신청하기", "Submit")}
+              <button
+                className={cx("h-12 rounded-2xl font-semibold", tone.brand, tone.brandHover, submitBusy && "opacity-60 pointer-events-none")}
+                onClick={submitBooking}
+                disabled={submitBusy}
+              >
+                {submitBusy ? "처리 중..." : "예약신청하기"}
               </button>
             </div>
           </div>
@@ -400,6 +451,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
   );
 }
 
+/* ---- Stepper ---- */
 function Stepper({ current, foreigner }: { current: number; foreigner: boolean }) {
   const pct = Math.round(((current + 1) / 4) * 100);
   return (
@@ -420,6 +472,7 @@ function Stepper({ current, foreigner }: { current: number; foreigner: boolean }
   );
 }
 
+/* ---- Terms ---- */
 function StepTerms({ form, setForm, t }: { form: any; setForm: any; t: (ko: string, en: string) => string }) {
   const { terms } = form;
   const set = (next: Partial<typeof terms>) => setForm((f: any) => ({ ...f, terms: { ...f.terms, ...next } }));
@@ -436,7 +489,7 @@ function StepTerms({ form, setForm, t }: { form: any; setForm: any; t: (ko: stri
       <Card>
         <label className="flex items-center gap-3 select-none p-3 rounded-2xl bg-slate-50 border border-slate-200">
           <input type="checkbox" checked={terms.all} onChange={(e) => toggleAll(e.target.checked)} className="size-5 rounded border-slate-300" />
-          <div className="text-[15px] font-semibold"> {t("전체 동의합니다", "Agree to all")}</div>
+          <div className="text-[15px] font-semibold">{t("전체 동의합니다", "Agree to all")}</div>
         </label>
         <CheckRow
           checked={terms.privacy}
@@ -481,6 +534,7 @@ const TERMS_PRIVACY = `1. 개인정보 수집 및 이용 목적: 예약 관련 �
 * 제공 동의를 거부할 권리가 있으나, 거부 시 서비스 이용에 제한이 있을 수 있습니다.`;
 const TERMS_NOTIFY = `예약 관련 안내(SMS/LMS) 수신 동의. 거부 시 예약 서비스 제공에 제약이 있을 수 있습니다.`;
 
+/* ---- Info ---- */
 function StepInfo({
   form,
   setForm,
@@ -564,7 +618,7 @@ function LabelWithStar({ text, required }: { text: string; required?: boolean })
   );
 }
 
-/* Postcode: 임베드 레이어 팝업(배포에서 작은 창 문제 해결) */
+/* Postcode: 전체화면 레이어로 열기 */
 function openPostcode(setForm: React.Dispatch<React.SetStateAction<any>>) {
   return async () => {
     await ensureDaumPostcode();
@@ -610,6 +664,7 @@ function ensureDaumPostcode() {
   });
 }
 
+/* ---- Exam ---- */
 function StepExam({
   form,
   setForm,
@@ -658,24 +713,24 @@ function StepExam({
     });
   }
 
-  const visibleAddons = addons; // 이미 상위에서 필터됨
+  const visibleAddons = addons;
 
   return (
     <section className="space-y-4">
       <Card>
         <div className="flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-[12px] text-slate-500">{t("선택 패키지", "Selected package")}</div>
+            <div className="text-[12px] text-slate-500">선택 패키지</div>
             <div className="text-sm font-semibold truncate">{pkgName}</div>
           </div>
           <div className="text-sm font-bold">{pkgPrice.toLocaleString()}원</div>
         </div>
       </Card>
 
-      <Card title={t("기본검사", "Basic exams")}>
+      <Card title="기본검사">
         <button onClick={() => setForm((f: any) => ({ ...f, showBasic: !f.showBasic }))} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-left">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">{t("기본검사 보기", "Show basic exams")}</div>
+            <div className="text-sm font-semibold">기본검사 보기</div>
             <div className="text-[12px] text-slate-500">{pkgBasic.length}</div>
           </div>
         </button>
@@ -695,8 +750,8 @@ function StepExam({
         const need = Math.max(0, Number(g.chooseCount) || 0);
         const picked = form.examSelected?.[gid]?.length || 0;
         return (
-          <Card key={gid} title={g.label || t("선택검사", "Options")} caption={need ? `${picked} / ${need} ${t("선택", "selected")}` : undefined}>
-            {need === 0 && <p className="text-sm text-slate-500 mb-2">{t("선택사항 없음", "No options")}</p>}
+          <Card key={gid} title={g.label || "선택검사"} caption={need ? `${picked} / ${need} 선택` : undefined}>
+            {need === 0 && <p className="text-sm text-slate-500 mb-2">선택사항 없음</p>}
             <div className="grid grid-cols-1 gap-2">
               {(g.items || []).filter((it) => isItemAllowedBySex(it, sex)).map((x, xi) => {
                 const key = itemKeyFrom(x, xi);
@@ -712,7 +767,7 @@ function StepExam({
                       active ? "border-[#2457ff] bg-[#eff3ff] text-[#163ec9]" : "border-slate-200 bg-white hover:bg-slate-50",
                       lock && "opacity-50 cursor-not-allowed"
                     )}
-                    title={lock ? t(`최대 ${need}개까지 선택`, `Up to ${need}`) : undefined}
+                    title={lock ? `최대 ${need}개까지 선택` : undefined}
                   >
                     <div className="font-medium">{x?.name || "-"}</div>
                     {x?.price ? <div className="text-[11px] opacity-80 mt-0.5">{Number(x.price).toLocaleString()}원</div> : null}
@@ -722,11 +777,9 @@ function StepExam({
             </div>
             {need > 0 && (
               <div className="mt-2 flex items-center justify-between text-xs">
-                <span className={picked === need ? "text-emerald-600" : "text-rose-600"}>
-                  {picked === need ? t("선택 완료", "Completed") : t(`${need - picked}개 더 선택`, `Select ${need - picked} more`)}
-                </span>
+                <span className={picked === need ? "text-emerald-600" : "text-rose-600"}>{picked === need ? "선택 완료" : `${need - picked}개 더 선택`}</span>
                 <button onClick={() => resetGroup(gid)} className="underline text-slate-500">
-                  {t("선택 초기화", "Reset")}
+                  선택 초기화
                 </button>
               </div>
             )}
@@ -735,26 +788,26 @@ function StepExam({
       })}
 
       {endoscopyFlags.any && (
-        <Card title={t("추가 문진", "Additional Questionnaire")}>
+        <Card title="추가 문진">
           <div className="grid gap-2">
-            <Field label={t("수술/시술 이력", "Procedure history")}>
+            <Field label="수술/시술 이력">
               <input
                 className={inputClass}
                 value={form.survey?.procedureHistory || ""}
                 onChange={(e) => setForm((f: any) => ({ ...f, survey: { ...f.survey, procedureHistory: e.target.value } }))}
-                placeholder={t("있다면 입력", "If any, describe")}
+                placeholder="있다면 입력"
               />
             </Field>
-            <Field label={t("치아 상태", "Teeth status")}>
+            <Field label="치아 상태">
               <input
                 className={inputClass}
                 value={form.survey?.teethStatus || ""}
                 onChange={(e) => setForm((f: any) => ({ ...f, survey: { ...f.survey, teethStatus: e.target.value } }))}
-                placeholder={t("브릿지/틀니 여부 등", "Bridge / denture etc.")}
+                placeholder="브릿지/틀니 여부 등"
               />
             </Field>
             {(endoscopyFlags.hasColo || (endoscopyFlags.hasEGD && endoscopyFlags.hasColo)) && (
-              <Field label={t("검진 후 2주이내 비행계획", "Flight plan within 2 weeks after exam")}>
+              <Field label="검진 후 2주이내 비행계획">
                 <div className="flex gap-2">
                   {["없음", "있음"].map((k) => (
                     <button
@@ -775,10 +828,10 @@ function StepExam({
         </Card>
       )}
 
-      <Card title={t("추가검사", "Add-on exams")} caption={addons.length ? `${addons.length}${t("개", " items")}` : undefined}>
+      <Card title="추가검사" caption={addons.length ? `${addons.length}개` : undefined}>
         <button onClick={() => setForm((f: any) => ({ ...f, showAddons: !f.showAddons }))} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-left">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">{t("추가검사 보기", "Show add-ons")}</div>
+            <div className="text-sm font-semibold">추가검사 보기</div>
             <div className="text-[12px] text-slate-500">{addons.length}</div>
           </div>
         </button>
@@ -801,7 +854,7 @@ function StepExam({
                 </li>
               );
             })}
-            {addons.length === 0 && <li className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500">{t("등록된 항목이 없습니다.", "No registered add-ons.")}</li>}
+            {addons.length === 0 && <li className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500">등록된 항목이 없습니다.</li>}
           </ul>
         )}
       </Card>
@@ -809,11 +862,31 @@ function StepExam({
   );
 }
 
-function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: any; monthMap: CapacityMonth; slots: Slot[]; t: (ko: string, en: string) => string }) {
+/* ---- Date ---- */
+function StepDate({
+  form,
+  setForm,
+  monthMap,
+  slots,
+  t,
+  onMonthChange,
+}: {
+  form: any;
+  setForm: any;
+  monthMap: CapacityMonth;
+  slots: Slot[];
+  t: (ko: string, en: string) => string;
+  onMonthChange: (ym: string) => void;
+}) {
   const [cursor, setCursor] = useState(new Date(form.date));
   const cal = useMemo(() => buildCalendar(cursor), [cursor]);
   const todayKey = ymdKey(new Date());
   const selectedKey = ymdKey(form.date);
+
+  /* 표시월이 바뀔 때마다 월 상태 재조회 */
+  useEffect(() => {
+    onMonthChange(`${cursor.getFullYear()}-${cursor.getMonth() + 1}`);
+  }, [cursor]); // eslint-disable-line
 
   return (
     <section className="space-y-4">
@@ -842,19 +915,20 @@ function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: a
 
         <div className="grid grid-cols-7 gap-2">
           {cal.map((d, i) => {
-            if (!d.inMonth) {
-              return <div key={i} className="aspect-square" />; // 타월 날짜는 빈 셀
-            }
+            if (!d.inMonth) return <div key={i} className="aspect-square" />;
             const key = ymdKey(d.date);
             const isToday = key === todayKey;
             const isSelected = key === selectedKey;
 
-            const raw = monthMap[key];
-            const status: "OPEN" | "FULL" | "CLOSED" = raw ? (String(raw).toUpperCase() as any) : "OPEN";
-            const disabled = status === "CLOSED" || status === "FULL";
+            const status: "OPEN" | "CLOSED" = monthMap[key] || "OPEN";
+            const disabled = status === "CLOSED";
 
             const clsBadge =
-              isSelected ? "bg-[#2457ff] text-white border-[#2457ff]" : status === "OPEN" ? "bg-blue-50 text-blue-600 border-blue-200" : status === "FULL" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-600 border-rose-200";
+              isSelected
+                ? "bg-[#2457ff] text-white border-[#2457ff]"
+                : status === "OPEN"
+                ? "bg-blue-50 text-blue-600 border-blue-200"
+                : "bg-rose-50 text-rose-600 border-rose-200";
 
             return (
               <button
@@ -871,7 +945,7 @@ function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: a
               >
                 <div className="text-[12px] mb-1 leading-none">{d.date.getDate()}</div>
                 <span className={cx("px-1.5 py-[2px] rounded-full text-[10px] border", clsBadge)}>
-                  {isSelected ? t("선택", "Picked") : status === "OPEN" ? t("가능", "OPEN") : status === "FULL" ? t("만석", "FULL") : t("마감", "CLOSED")}
+                  {isSelected ? t("선택", "Picked") : status === "OPEN" ? t("가능", "OPEN") : t("마감", "CLOSED")}
                 </span>
               </button>
             );
@@ -910,6 +984,7 @@ function StepDate({ form, setForm, monthMap, slots, t }: { form: any; setForm: a
   );
 }
 
+/* ---- Card/Field/Row ---- */
 function Card({ title, caption, children }: { title?: string; caption?: string; children: React.ReactNode }) {
   return (
     <section className={cx("rounded-3xl p-5 md:p-6 shadow-sm", tone.card, tone.line)}>
@@ -931,7 +1006,10 @@ function Field({ label, children }: { label: React.ReactNode; children: React.Re
     </label>
   );
 }
-const inputClass = cx("w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm", "placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-200 focus:border-slate-300");
+const inputClass = cx(
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm",
+  "placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-200 focus:border-slate-300"
+);
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex items-center justify-between border-b border-slate-100 py-2 last:border-b-0">
@@ -941,7 +1019,7 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
-/* 통신 */
+/* ---- data fetch ---- */
 async function fetchPackage(tenant: string, packageId: string, corpCode?: string): Promise<PackagePayload> {
   const endpoints = [
     `/api/public/${tenant}/package?` + new URLSearchParams({ id: packageId }).toString(),
@@ -995,35 +1073,67 @@ async function fetchAddons(tenant: string): Promise<Addon[]> {
     return [];
   }
 }
-async function fetchCapacityMonth(tenant: string, ym: string): Promise<CapacityMonth> {
-  const res = await fetch(`/api/public/${tenant}/capacity?month=${ym}`, { cache: "no-store", headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error("capacity error");
-  const j = await res.json();
-  const raw: any = j?.days ?? j;
-  if (!raw || typeof raw !== "object") return {};
+
+/* 사용자 기준 월 상태 조회:
+   - 기본만 필요하면 month 엔드포인트 사용
+   - 내시경(egd/col) 포함 시 상세(from/to/resources)로 계산 */
+async function fetchCapacityMonthSmart(
+  tenant: string,
+  ym: string,
+  flags: { needEGD: boolean; needCol: boolean }
+): Promise<CapacityMonth> {
+  const [yStr, mStr] = ym.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const last = new Date(y, m, 0).getDate();
+  const from = `${yStr}-${pad2(m)}-01`;
+  const to = `${yStr}-${pad2(m)}-${pad2(last)}`;
+
+  // 기본만 필요한 경우: 단순 month API 사용
+  if (!flags.needEGD && !flags.needCol) {
+    const res = await fetch(`/api/public/${tenant}/capacity?month=${y}-${m}`, { cache: "no-store", headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error("capacity error");
+    const j = await res.json();
+    const raw: any = j?.days ?? j;
+    const out: CapacityMonth = {};
+    for (const [k, v] of Object.entries(raw || {})) out[k] = (String(v).toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN");
+    return out;
+  }
+
+  // 특수 필요 시: 상세 API로 basic + 특수 마감 병합
+  const resKeys = ["basic"].concat(flags.needEGD ? ["egd"] : []).concat(flags.needCol ? ["col"] : []);
+  const url = `/api/public/${tenant}/capacity?` + new URLSearchParams({ from, to, resources: resKeys.join(",") }).toString();
+  const r = await fetch(url, { cache: "no-store", headers: { accept: "application/json" } });
+  if (!r.ok) throw new Error("capacity detail error");
+  const jd = await r.json();
+  const days = (jd?.days || {}) as Record<
+    string,
+    Partial<Record<string, { cap: number; used: number; closed?: boolean }>>
+  >;
   const out: CapacityMonth = {};
-  for (const [k, v] of Object.entries(raw)) out[k] = (String(v).toUpperCase() as any) || "OPEN";
+  for (const k of Object.keys(days)) {
+    const d = days[k] || {};
+    const basicClosed = Boolean(d.basic?.closed);
+    const egdClosed = Boolean(d.egd?.closed);
+    const colClosed = Boolean(d.col?.closed) || Boolean((d as any).cscope?.closed);
+    const closed = basicClosed || (flags.needEGD && egdClosed) || (flags.needCol && colClosed);
+    out[k] = closed ? "CLOSED" : "OPEN";
+  }
   return out;
 }
+
 async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
-  const urls = [
-    `/api/public/${tenant}/timeslots?date=${ymd}`,
-    `/api/public/${tenant}/slots?date=${ymd}`,
-    `/api/public/${tenant}/capacity?date=${ymd}`,
-  ];
+  const urls = [`/api/public/${tenant}/timeslots?date=${ymd}`, `/api/public/${tenant}/slots?date=${ymd}`, `/api/public/${tenant}/capacity?date=${ymd}`];
   for (const u of urls) {
     try {
       const r = await fetch(u, { cache: "no-store", headers: { accept: "application/json" } });
       if (!r.ok) continue;
       const j = await r.json();
-      const raw: any[] =
-        Array.isArray(j?.slots) ? j.slots :
-        Array.isArray(j?.times) ? j.times :
-        Array.isArray(j) ? j : [];
+      const raw: any[] = Array.isArray(j?.slots) ? j.slots : Array.isArray(j?.times) ? j.times : Array.isArray(j) ? j : [];
       const mapped: Slot[] = raw
         .map((s: any) => {
           const time = s?.time || s?.hhmm || s?.start || (typeof s === "string" ? s : "");
-          const status: Slot["status"] = s?.status ? (String(s.status).toUpperCase() as any) : (s?.available === false ? "FULL" : "OPEN");
+          const status: Slot["status"] = s?.status ? (String(s.status).toUpperCase() as any) : s?.available === false ? "FULL" : "OPEN";
           return { time, status };
         })
         .filter((x) => typeof x.time === "string" && /^\d{2}:\d{2}$/.test(x.time));
@@ -1038,23 +1148,51 @@ async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
 function generateSlots(): Slot[] {
   const out: Slot[] = [];
   for (let m = 7 * 60; m <= 10 * 60; m += 30) {
-    const hh = String(Math.floor(m / 60)).padStart(2, "0");
-    const mm = String(m % 60).padStart(2, "0");
+    const hh = pad2(Math.floor(m / 60));
+    const mm = pad2(m % 60);
     out.push({ time: `${hh}:${mm}`, status: "OPEN" });
   }
   return out;
 }
-async function createBooking(payload: any): Promise<boolean> {
+function makeIdemKey() {
+  const g: any = globalThis as any;
+  if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
+  return `idem_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+async function createBooking(payload: any): Promise<{ ok: boolean; msg?: string }> {
   try {
-    const res = await fetch(`/api/public/${payload.tenant}/booking`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    return res.ok;
+    const key = makeIdemKey();
+    const res = await fetch(`/api/public/${payload.tenant}/booking`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": key,
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    if (res.status === 409) {
+      const j = await res.json().catch(() => ({}));
+      const code = (j && (j.code as string)) || "";
+      if (code === "FULL") return { ok: false, msg: "해당 시간은 만석입니다." };
+      if (code === "CLOSED") return { ok: false, msg: "선택하신 날짜는 마감되었습니다." };
+      return { ok: false, msg: "예약이 불가합니다." };
+    }
+    return { ok: res.ok };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
-/* buildBookingPayload: 코드만 저장 + 유효코드만 엑셀로 */
-function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayload | null, form: any) {
+/* buildBookingPayload */
+function buildBookingPayload(
+  tenant: string,
+  packageId: string,
+  pkg: PackagePayload | null,
+  form: any,
+  corp?: { corpCode?: string; corpName?: string }
+) {
   const groupsSnap = (pkg?.optionGroups || []).map((g, gi) => {
     const gid = groupIdOf(g, gi);
     const picked = new Set(form?.examSelected?.[gid] || []);
@@ -1069,15 +1207,11 @@ function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayl
     return { id: gid, label: g?.label || "", selected };
   });
 
-  const labelJoin = (rx: RegExp) =>
-    groupsSnap.find((g) => rx.test(g.label))?.selected.map((s) => s.name).filter(Boolean).join(",") || "";
+  const labelJoin = (rx: RegExp) => groupsSnap.find((g) => rx.test(g.label))?.selected.map((s) => s.name).filter(Boolean).join(",") || "";
   const selectedA = labelJoin(/A/i);
   const selectedB = labelJoin(/B/i);
 
-  const examCodes = groupsSnap
-    .flatMap((g) => g.selected.map((s) => s.code))
-    .filter(isValidExamCode)
-    .join(",");
+  const examCodes = groupsSnap.flatMap((g) => g.selected.map((s) => s.code)).filter(isValidExamCode).join(",");
 
   const coPayKRW = Number(pkg?.price) || 0;
 
@@ -1100,9 +1234,8 @@ function buildBookingPayload(tenant: string, packageId: string, pkg: PackagePayl
     datetime: `${ymdKey(form.date)} ${form.time}`,
     status: "PENDING",
     survey: form.survey || {},
+    meta: { corpCode: corp?.corpCode || "", corpName: corp?.corpName || "" },
   };
 }
-
-
 
 

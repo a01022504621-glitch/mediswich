@@ -56,7 +56,7 @@ export default async function Layout({ children }: { children: ReactNode }) {
         <div className="flex h-full flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-4">
             <div className="h-6 w-6 rounded bg-white/90" />
-            <div className="text-lg font-semibold tracking-tight">MediSwitch</div>
+            <div className="text-lg font-semibold tracking-tight">MediSwich</div>
           </div>
           <nav className="flex-1 overflow-y-auto px-3 py-2">
             <SidebarNav groups={NAV_GROUPS} />

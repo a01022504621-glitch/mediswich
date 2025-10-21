@@ -270,9 +270,10 @@ model Booking {
   patientBirth    String?
   sex             Sex?
 
-  code   String        @default(cuid())
-  status BookingStatus @default(RESERVED)
-  meta   Json?
+  code             String        @default(cuid())
+  status           BookingStatus @default(RESERVED)
+  meta             Json?
+  idempotencyKey   String?       @db.VarChar(64) @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -421,3 +422,4 @@ model Invoice {
 
   @@index([hospitalId, issuedAt])
 }
+

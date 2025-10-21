@@ -12,54 +12,49 @@ async function getHospitalScope(): Promise<{ id?: string; slug?: string }> {
     if (slug) localStorage.setItem("ms:lastHslug", slug);
     return { id, slug };
   } catch {
-    return { id: localStorage.getItem("ms:lastHid") || undefined, slug: localStorage.getItem("ms:lastHslug") || undefined };
+    return {
+      id: localStorage.getItem("ms:lastHid") || undefined,
+      slug: localStorage.getItem("ms:lastHslug") || undefined,
+    };
   }
 }
+export async function ensureHospitalScope() { await getHospitalScope(); }
 
-/** 페이지 마운트 시 한 번 호출해 병원 스코프 캐싱 */
-export async function ensureHospitalScope() {
-  await getHospitalScope();
-}
-
-function hidFromCache() {
-  return localStorage.getItem("ms:lastHid") || "anon";
-}
+function hidFromCache() { return localStorage.getItem("ms:lastHid") || "anon"; }
 const PKG_PREFIX = "ms:pkg";
 const CODE_PREFIX = "ms:codes";
 const keyOf = (prefix: string, ns: Ns, hid = hidFromCache()) => `${prefix}:${ns}:${hid}`;
 
-/* ---------------- codes (검사코드) ---------------- */
+/* ---------------- codes ---------------- */
 export function loadCodes(ns?: Ns) {
-  try {
-    const raw = localStorage.getItem(keyOf(CODE_PREFIX, (ns || "general") as Ns)) || "{}";
-    return JSON.parse(raw);
-  } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(keyOf(CODE_PREFIX, (ns || "general") as Ns)) || "{}"); }
+  catch { return {}; }
 }
 export function saveCodes(map: Record<string, string>, ns?: Ns) {
   localStorage.setItem(keyOf(CODE_PREFIX, (ns || "general") as Ns), JSON.stringify(map || {}));
 }
 export function upsertCode(examId: string, code: string, ns?: Ns) {
-  const cur = loadCodes(ns);
-  const next = { ...cur, [examId]: code };
-  saveCodes(next, ns);
-  return next;
+  const cur = loadCodes(ns); const next = { ...cur, [examId]: code }; saveCodes(next, ns); return next;
 }
 
-/* ---------------- packages (드래프트) ---------------- */
+/* ---------------- local drafts ---------------- */
 export function loadPackages(ns: Ns) {
-  try {
-    const raw = localStorage.getItem(keyOf(PKG_PREFIX, ns)) || "[]";
-    return JSON.parse(raw) as any[];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(keyOf(PKG_PREFIX, ns)) || "[]") as any[]; }
+  catch { return []; }
 }
 export function savePackages(ns: Ns, list: any[]) {
   localStorage.setItem(keyOf(PKG_PREFIX, ns), JSON.stringify(list || []));
 }
 
-/* 서버로 보낼 tags 포맷 변환 */
+/* ===== 변환 ===== */
+function groupLabelDefault(gid: string) {
+  if (gid === "base") return "기본검사";
+  const token = gid.startsWith("opt_") ? gid.replace("opt_", "") : gid;
+  return `선택검사 ${token}`;
+}
 function rowsToValues(rows: any[]) {
-  return (rows || []).map(r => ({
-    id: r.examId, name: r.name ?? "", sex: r.sex ?? "A", memo: r.memo ?? "", code: r.code ?? ""
+  return (rows || []).map((r) => ({
+    id: r.examId, name: r.name ?? "", sex: r.sex ?? "A", memo: r.memo ?? "", code: r.code ?? "",
   }));
 }
 function draftToServerBody(ns: Ns, p: any) {
@@ -68,7 +63,12 @@ function draftToServerBody(ns: Ns, p: any) {
   for (const gid of order) {
     const meta = (p.groupMeta || {})[gid] || {};
     const values = rowsToValues((p.groups || {})[gid] || []);
-    const base = { id: gid, label: meta.label, chooseCount: meta.chooseCount ?? (gid === "base" ? 0 : values.length ? 1 : 0), values };
+    const base = {
+      id: gid,
+      label: meta.label,
+      chooseCount: meta.chooseCount ?? (gid === "base" ? 0 : values.length ? 1 : 0),
+      values,
+    };
     groups[gid === "base" ? "basic" : gid] = base;
   }
   const tags: any = {
@@ -86,27 +86,63 @@ function draftToServerBody(ns: Ns, p: any) {
     tags,
   };
 }
+function serverToDraft(sp: any) {
+  const tags = sp?.tags || {};
+  const groupsIn = tags.groups || {};
+  const orderIn: string[] = Array.isArray(tags.groupOrder) ? tags.groupOrder : Object.keys(groupsIn);
 
-/* 병원 단위로 “전체 갈아끼우기” → 간단하고 안전 */
-async function wipeAll(ns: Ns) {
-  const url =
-    ns === "general" ? "/api/m/packages/general"
-    : ns === "nhis"   ? "/api/m/packages/nhis"
-    :                  "/api/m/packages/corp";
-  await fetch(url, { method: "DELETE" }); // corp도 병원 단위 일괄 삭제 지원
+  const groups: Record<string, any[]> = {};
+  const groupMeta: Record<string, any> = {};
+  const orderOut: string[] = [];
+
+  for (const k of orderIn) {
+    const g = groupsIn[k] || {};
+    const gid = k === "basic" ? "base" : k;
+    orderOut.push(gid);
+    groupMeta[gid] = {
+      id: gid,
+      label: g.label || groupLabelDefault(gid),
+      color: gid === "base" ? "sky" : "slate",
+      chooseCount: typeof g.chooseCount === "number" ? g.chooseCount : gid === "base" ? 0 : 1,
+    };
+    groups[gid] = (g.values || []).map((v: any) => ({
+      examId: v.id, name: v.name || "", sex: v.sex || "A", memo: v.memo || "", code: v.code || "",
+    }));
+  }
+
+  const period = tags.period || {};
+  const from = period.from ?? sp.startDate ?? null;
+  const to = period.to ?? sp.endDate ?? null;
+
+  return {
+    id: sp.id || `pkg_${Math.random().toString(36).slice(2)}`,
+    name: sp.title || "",
+    from, to,
+    price: sp.price ?? 0,
+    groups, groupOrder: orderOut, groupMeta,
+    addons: Array.isArray(tags.addons) ? tags.addons : [],
+    showInBooking: !!sp.visible,
+  };
 }
 
-/** 화면에서 저장/삭제/토글 후에 호출 → 서버와 동기화 */
+/* ===== 서버 동기화 ===== */
+async function scopeUrl(ns: Ns, withHid = false) {
+  const cat = ns === "nhis" ? "nhis" : ns === "corp" ? "corp" : "general";
+  const base = `/api/m/packages/${cat}`;
+  if (!withHid) return base;
+  const { id } = await getHospitalScope();
+  return id ? `${base}?hid=${encodeURIComponent(id)}` : base;
+}
+async function wipeAll(ns: Ns) {
+  const url = await scopeUrl(ns, true);
+  await fetch(url, { method: "DELETE" });
+}
 export async function publishPackages(ns: Ns, list: any[]) {
   await wipeAll(ns);
-  const url =
-    ns === "general" ? "/api/m/packages/general"
-    : ns === "nhis"   ? "/api/m/packages/nhis"
-    :                  "/api/m/packages/corp";
+  const url = await scopeUrl(ns, true);
   for (const p of list) {
     const body = draftToServerBody(ns, p);
-    // corp이면 clientId 포함
-    if (ns === "corp") (body as any).clientId = p.clientId || null;
+    if (ns === "corp") (body as any).clientId = (p as any).clientId || null;
     await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
@@ -114,5 +150,34 @@ export async function publishPackages(ns: Ns, list: any[]) {
     });
   }
 }
+
+/** DB 우선 조회: 1) 관리자용 GET(hid) 2) 퍼블릭 슬러그 3) 로컬 */
+export async function loadPackagesDBFirst(ns: Ns): Promise<any[]> {
+  try {
+    const { id, slug } = await getHospitalScope();
+    const cat = ns;
+    // 1) 관리자용
+    if (id) {
+      const r = await fetch(`/api/m/packages/${cat}?hid=${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (r.ok) {
+        const arr = (await r.json()) as any[];
+        return Array.isArray(arr) ? arr.map(serverToDraft) : [];
+      }
+    }
+    // 2) 퍼블릭
+    if (slug) {
+      const r = await fetch(`/api/public/${encodeURIComponent(slug)}/packages?cat=${encodeURIComponent(cat)}`, { cache: "no-store" });
+      if (r.ok) {
+        const arr = (await r.json()) as any[];
+        return Array.isArray(arr) ? arr.map(serverToDraft) : [];
+      }
+    }
+    // 3) 로컬 캐시
+    return loadPackages(ns);
+  } catch {
+    return loadPackages(ns);
+  }
+}
+
 
 

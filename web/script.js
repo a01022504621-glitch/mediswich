@@ -1,219 +1,126 @@
-/*
-=====================================================
-JavaScript File: script.js (Definitive Final Version)
-=====================================================
-*/
 document.addEventListener('DOMContentLoaded', () => {
-    
-    // ----------------------------------------------------
-    // 0. 공통 요소 정의
-    // ----------------------------------------------------
-    const header = document.querySelector('.header');
-
-    // ----------------------------------------------------
-    // 1. 초기 애니메이션 (헤더 로고와 메뉴)
-    // ----------------------------------------------------
-    const runInitialAnimations = () => {
-        const logo = document.querySelector('.logo');
-        const ctaButton = document.querySelector('.header .cta-button');
-        const navItems = document.querySelectorAll('.nav > a, .dropdown');
-
-        if (!logo && navItems.length === 0 && !ctaButton) return; 
-
-        document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in').forEach(el => {
-            el.classList.remove('is-visible');
-        });
-        
-        if (logo) setTimeout(() => { logo.classList.add('is-visible'); }, 100);
-        
-        let delay = 100;
-        
-        navItems.forEach((item) => {
-            setTimeout(() => {
-                item.classList.add('is-visible');
-            }, delay);
-            delay += 100;
-        });
-
-        if (ctaButton) {
-            setTimeout(() => {
-                ctaButton.classList.add('is-visible');
-            }, delay);
-        }
-    };
-    
-    runInitialAnimations();
-
-
-    // ----------------------------------------------------
-    // 2. 스크롤 시 요소 나타나기 애니메이션 (반복 실행)
-    // ----------------------------------------------------
-    const animateElements = document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in');
+    // Observe elements for in-view animations
+    const animateElements = document.querySelectorAll('.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in');
 
     const observerOptions = {
-        root: null, 
+        root: null,
         rootMargin: '0px',
-        threshold: 0.1
+        threshold: 0.15
     };
 
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('is-visible');
-            } 
-            else {
+            } else {
                 entry.target.classList.remove('is-visible');
             }
         });
     }, observerOptions);
 
-    animateElements.forEach(el => {
-        observer.observe(el);
-    });
-    
-    // ----------------------------------------------------
-    // 3. 헤더 스크롤 시 스타일 변경
-    // ----------------------------------------------------
-    if (header) {
-        window.addEventListener('scroll', () => {
-            if (window.scrollY > 80) { 
-                header.classList.add('scrolled');
-            } else {
-                header.classList.remove('scrolled');
-            }
-        });
-    }
+    animateElements.forEach(el => observer.observe(el));
 
-    // ----------------------------------------------------
-    // 4. CONTACT 모달 기능 구현 
-    // ----------------------------------------------------
-    const modal = document.getElementById('contact-modal');
-    const openBtns = document.querySelectorAll('[id^="open-contact-modal"]'); 
-    const closeBtn = document.querySelector('.modal .close-button'); 
-    const modalForm = document.getElementById('contact-form-modal'); 
-
-    const openModal = (e) => {
-        if (e) e.preventDefault(); 
-        if (!modal) return;
-        modal.classList.add('open'); 
-        document.body.style.overflow = 'hidden'; 
-    };
-
-    const closeModal = () => {
-        if (!modal) return;
-        modal.classList.remove('open');
-        document.body.style.overflow = ''; 
-    };
-
-    openBtns.forEach(btn => {
-        btn.addEventListener('click', openModal);
+    // Header scroll style
+    const header = document.querySelector('.header');
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 80) header.classList.add('scrolled');
+        else header.classList.remove('scrolled');
     });
 
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    // Initial animations for logo and nav items
+    const logo = document.querySelector('.logo');
+    const navItems = document.querySelectorAll('.nav-item');
+    const heroPrimaryCta = document.querySelector('.hero .cta-button.primary');
+    const heroSecondaryCta = document.querySelector('.hero .cta-button.secondary');
 
-    window.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            closeModal();
-        }
+    logo.classList.add('is-visible');
+    navItems.forEach((item) => {
+        item.classList.add('fade-in-up');
+        item.classList.add('is-visible');
     });
+    if (heroPrimaryCta) heroPrimaryCta.classList.add('is-visible');
+    if (heroSecondaryCta) heroSecondaryCta.classList.add('is-visible');
 
-    // 모달 폼 제출 처리 
-    if (modalForm) {
-        modalForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
-            console.log("=== 소개서 다운로드 문의 데이터 수집 ===", data);
-            alert(`[${data.name} 고객님] 문의가 접수되었습니다. 확인 후 이메일(${data.email})로 서비스 소개서를 보내드리겠습니다.`);
-            this.reset(); 
-            closeModal(); 
-        });
-    }
+    // If you add icon-only assets, the <picture> will prefer them automatically.
 
-    // 5. Contact.html 페이지 폼 제출 처리
-    const pageForm = document.getElementById('contact-form-page');
-    if (pageForm) {
-        pageForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
-            console.log("=== 페이지 문의 데이터 수집 ===", data);
-            alert(`[${data.name} 고객님] 문의가 접수되었습니다. 신속하게 연락드리겠습니다.`);
-            this.reset(); 
-        });
-    }
+    // --- Dev helper: export icon-only PNG from wide logo.png ---
+    // How to use: open the site with `#export-icon` hash, e.g. index.html#export-icon
+    // It will detect the opaque bounding box, then take a leftmost square (height x height)
+    // which corresponds to the icon area, and download as `logo-icon.png`.
+    function exportLogoIcon(options = {}) {
+        const src = options.src || 'logo.png';
+        const alphaThreshold = options.alphaThreshold ?? 16; // ignore near-transparent anti-alias halos
+        const extraPad = options.extraPad ?? 0; // optional integer pixels to pad inside crop
 
-    // ----------------------------------------------------
-    // 6. 모바일 메뉴 토글 기능 (햄버거 버튼 생성 로직 포함)
-    // ----------------------------------------------------
-    if (header) {
-        let menuToggleBtn = document.querySelector('.menu-toggle-btn');
-        if (!menuToggleBtn) {
-            menuToggleBtn = document.createElement('button');
-            menuToggleBtn.classList.add('menu-toggle-btn');
-            menuToggleBtn.setAttribute('aria-label', '메뉴 열기/닫기');
-            menuToggleBtn.innerHTML = '&#9776;';
-            
-            const headerContainer = document.querySelector('.header .container');
-            if (headerContainer) {
-                const headerRight = document.querySelector('.header-right');
-                if (headerRight) {
-                    headerContainer.insertBefore(menuToggleBtn, headerRight);
-                } else {
-                    headerContainer.appendChild(menuToggleBtn);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const w = img.naturalWidth;
+            const h = img.naturalHeight;
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const { data } = ctx.getImageData(0, 0, w, h);
+
+            // Find bounding box of non-transparent pixels
+            let minX = w, minY = h, maxX = -1, maxY = -1;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4 + 3; // alpha index
+                    if (data[i] >= alphaThreshold) {
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
                 }
             }
-        }
-
-        if (menuToggleBtn) {
-            menuToggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                header.classList.toggle('menu-open');
-                
-                if (header.classList.contains('menu-open')) {
-                    menuToggleBtn.innerHTML = '&times;';
-                } else {
-                    menuToggleBtn.innerHTML = '&#9776;';
-                }
-            });
-        }
-    }
-
-    // ----------------------------------------------------
-    // 7. 데스크톱 & 모바일 드롭다운 클릭 토글 기능
-    // ----------------------------------------------------
-    const dropdowns = document.querySelectorAll('.dropdown');
-
-    dropdowns.forEach(dropdown => {
-        const dropdownLink = dropdown.querySelector('a');
-        dropdownLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const isActive = dropdown.classList.contains('active');
-
-            document.querySelectorAll('.dropdown.active').forEach(activeDropdown => {
-                activeDropdown.classList.remove('active');
-            });
-
-            if (!isActive) {
-                dropdown.classList.add('active');
+            if (maxX < 0 || maxY < 0) {
+                alert('No opaque pixels found in logo.png');
+                return;
             }
-        });
-    });
 
-    // 외부 클릭 시 드롭다운 및 모바일 메뉴 닫기 기능
-    window.addEventListener('click', (e) => {
-        if (!e.target.closest('.dropdown')) {
-            document.querySelectorAll('.dropdown.active').forEach(dropdown => {
-                dropdown.classList.remove('active');
-            });
-        }
-        
-        const menuToggleBtn = document.querySelector('.menu-toggle-btn');
-        if (header.classList.contains('menu-open') && !e.target.closest('.header')) {
-             header.classList.remove('menu-open');
-             if(menuToggleBtn) menuToggleBtn.innerHTML = '&#9776;';
-        }
-    });
+            // Derive left square crop (icon area). Use square size = bbox height.
+            const bboxW = maxX - minX + 1;
+            const bboxH = maxY - minY + 1;
+            let cropX = minX;
+            let cropY = minY;
+            let cropSize = bboxH;
+
+            // Keep square within image bounds
+            if (cropX + cropSize > w) cropX = Math.max(0, w - cropSize);
+            if (cropY + cropSize > h) cropY = Math.max(0, h - cropSize);
+
+            // Optional inner padding (shrink crop slightly)
+            cropX = Math.max(0, cropX + extraPad);
+            cropY = Math.max(0, cropY + extraPad);
+            cropSize = Math.max(1, cropSize - extraPad * 2);
+
+            // Draw to output canvas
+            const out = document.createElement('canvas');
+            out.width = cropSize;
+            out.height = cropSize;
+            const octx = out.getContext('2d');
+            octx.drawImage(canvas, cropX, cropY, cropSize, cropSize, 0, 0, cropSize, cropSize);
+
+            // Trigger download
+            const a = document.createElement('a');
+            a.download = 'logo-icon.png';
+            a.href = out.toDataURL('image/png');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            console.log('Downloaded: logo-icon.png');
+        };
+        img.onerror = () => alert('Failed to load ' + src);
+        img.src = src;
+    }
+    window.exportLogoIcon = exportLogoIcon;
+
+    if (location.hash.replace('#', '') === 'export-icon') {
+        // small delay to ensure page is interactive
+        setTimeout(() => exportLogoIcon(), 50);
+    }
 });
