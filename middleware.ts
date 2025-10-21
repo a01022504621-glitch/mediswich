@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export const config = {
-  // API, 정적 파일, 그리고 '.' 포함 파일은 제외
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
 
@@ -20,9 +19,8 @@ export function middleware(req: NextRequest) {
   const origPath = url.pathname;
   const isProd = process.env.NODE_ENV === "production";
 
-  // 서브도메인 → 경로 매핑
   const parts = host.split(".");
-  const sub = parts.length > 2 ? parts[0] : ""; // admin | www | {tenant} | ""
+  const sub = parts.length > 2 ? parts[0] : "";
 
   const mapped = new URL(url);
   if (host.endsWith("." + ROOT)) {
@@ -47,7 +45,6 @@ export function middleware(req: NextRequest) {
 
   const needAuth = !isPublic && (p.startsWith("/m") || p.startsWith("/api/m"));
 
-  // 인증 가드
   if (needAuth && !isAuthed(req)) {
     if (isApi) {
       return new NextResponse(JSON.stringify({ error: "UNAUTHORIZED" }), {
@@ -61,7 +58,6 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(to);
   }
 
-  // 로그인 상태로 /m/login 접근 시 대시보드로
   if (p === "/m/login" && isAuthed(req)) {
     const to = new URL(mapped);
     to.pathname = "/m/dashboard";
@@ -69,11 +65,9 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(to);
   }
 
-  // 리라이트/패스스루
   const changed = p !== origPath;
   const res = changed ? NextResponse.rewrite(mapped) : NextResponse.next();
 
-  // 공용 보안 헤더
   res.headers.set("x-url", req.nextUrl.toString());
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
@@ -81,15 +75,13 @@ export function middleware(req: NextRequest) {
   res.headers.set("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   if (isProd) res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
 
-  // CSP
   const devScript = isProd ? [] : ["'unsafe-eval'"];
-  const devStyle = isProd ? [] : ["'unsafe-inline'"];
   const httpDaum = isProd ? [] : ["http://*.daumcdn.net", "http://*.daum.net"];
 
   const csp = [
     "default-src 'self'",
     `script-src ${["'self'", "'unsafe-inline'", "https://t1.daumcdn.net", "https://ssl.daumcdn.net", ...devScript].join(" ")}`,
-    `style-src ${["'self'", ...devStyle].join(" ")}`,
+    `style-src 'self' 'unsafe-inline'`, // ← 인라인 스타일 허용
     `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", "https://images.unsplash.com", ...httpDaum].join(" ")}`,
     `font-src 'self' data:`,
     `connect-src ${["'self'", ...(isProd ? [] : ["ws:", "http://localhost:3000"])].join(" ")}`,
@@ -100,6 +92,6 @@ export function middleware(req: NextRequest) {
   ].join("; ");
   res.headers.set("Content-Security-Policy", csp);
 
-  // 주의: matcher에서 api를 제외했으므로 /api/public/* 캐시는 각 API 라우트 또는 fetch 옵션에서 제어
   return res;
 }
+
