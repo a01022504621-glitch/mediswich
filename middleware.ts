@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export const config = {
-  // ✨ 최종 수정: API, 정적 파일, 그리고 '.'이 포함된 모든 파일(예: list.xlsx, a.png)을 미들웨어에서 제외합니다.
+  // API, 정적 파일, 그리고 '.' 포함 파일은 제외
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
 
@@ -20,19 +20,16 @@ export function middleware(req: NextRequest) {
   const origPath = url.pathname;
   const isProd = process.env.NODE_ENV === "production";
 
-  // 서브도메인 추출
+  // 서브도메인 → 경로 매핑
   const parts = host.split(".");
   const sub = parts.length > 2 ? parts[0] : ""; // admin | www | {tenant} | ""
 
-  // 서브도메인 매핑(관리자/병원)
-  let mapped = new URL(url); // 목적지 계산용
+  const mapped = new URL(url);
   if (host.endsWith("." + ROOT)) {
     if (sub === "admin") {
-      // admin.<root> -> /m 아래로
       if (origPath === "/") mapped.pathname = "/m";
       else if (!origPath.startsWith("/m")) mapped.pathname = `/m${origPath}`;
     } else if (sub && sub !== "www") {
-      // {tenant}.<root> -> /r/{tenant} 아래로
       if (origPath === "/") mapped.pathname = `/r/${sub}`;
       else if (!origPath.startsWith(`/r/${sub}`)) mapped.pathname = `/r/${sub}${origPath}`;
     }
@@ -64,7 +61,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(to);
   }
 
-  // 로그인 상태로 /m/login 접근시 대시보드로
+  // 로그인 상태로 /m/login 접근 시 대시보드로
   if (p === "/m/login" && isAuthed(req)) {
     const to = new URL(mapped);
     to.pathname = "/m/dashboard";
@@ -72,7 +69,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(to);
   }
 
-  // 리라이트 결정
+  // 리라이트/패스스루
   const changed = p !== origPath;
   const res = changed ? NextResponse.rewrite(mapped) : NextResponse.next();
 
@@ -84,14 +81,13 @@ export function middleware(req: NextRequest) {
   res.headers.set("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   if (isProd) res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
 
-  // CSP 설정
+  // CSP
   const devScript = isProd ? [] : ["'unsafe-eval'"];
   const devStyle = isProd ? [] : ["'unsafe-inline'"];
   const httpDaum = isProd ? [] : ["http://*.daumcdn.net", "http://*.daum.net"];
-  
+
   const csp = [
     "default-src 'self'",
-    // ✨ 운영 환경에서도 'unsafe-inline'을 허용하도록 수정
     `script-src ${["'self'", "'unsafe-inline'", "https://t1.daumcdn.net", "https://ssl.daumcdn.net", ...devScript].join(" ")}`,
     `style-src ${["'self'", ...devStyle].join(" ")}`,
     `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", "https://images.unsplash.com", ...httpDaum].join(" ")}`,
@@ -104,10 +100,6 @@ export function middleware(req: NextRequest) {
   ].join("; ");
   res.headers.set("Content-Security-Policy", csp);
 
-  // 공개 API 캐시(페이지에만 적용)
-  if (p.startsWith("/api/public/")) {
-    res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=600");
-  }
-
+  // 주의: matcher에서 api를 제외했으므로 /api/public/* 캐시는 각 API 라우트 또는 fetch 옵션에서 제어
   return res;
 }

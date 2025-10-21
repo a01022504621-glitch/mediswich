@@ -6,7 +6,8 @@ import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 import CatalogClient from "./_components/CatalogClient.client";
 import type { CSSProperties } from "react";
 
-export const revalidate = 120;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /* --- 타입 및 기본값 --- */
 type PatientPageConfig = {
@@ -23,7 +24,6 @@ type PatientPageConfig = {
   };
 };
 
-// [수정 1] : Required<PatientPageConfig> 타입 선언 제거
 const DEFAULT_CFG = {
   themePreset: "modern",
   colors: { bg: "#EEF4FF", fg: "#0F172A", accent: "#3B82F6" },
@@ -31,9 +31,9 @@ const DEFAULT_CFG = {
   titleLines: ["Health Checkup Center"],
   titleColor: "#0F172A",
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
-};
+} as const;
 
-/* 유효 hex 색상인지 판별하는 타입가드 */
+/* 유효 hex 색상 타입가드 */
 const RE_HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 function isHex(x: unknown): x is string {
   return typeof x === "string" && RE_HEX.test(x);
@@ -47,7 +47,6 @@ function safeParse(s: string | null | undefined) {
   }
 }
 
-// [수정 2] : Required<PatientPageConfig> 반환 타입 선언 제거
 function norm(cfg?: PatientPageConfig) {
   const c = cfg || {};
   return {
@@ -55,9 +54,9 @@ function norm(cfg?: PatientPageConfig) {
       ? (c.themePreset as any)
       : DEFAULT_CFG.themePreset,
     colors: {
-      bg: isHex(c.colors?.bg) ? c.colors.bg : DEFAULT_CFG.colors.bg,
-      fg: isHex(c.colors?.fg) ? c.colors.fg : DEFAULT_CFG.colors.fg,
-      accent: isHex(c.colors?.accent) ? c.colors.accent : DEFAULT_CFG.colors.accent,
+      bg: isHex(c.colors?.bg) ? c.colors!.bg : DEFAULT_CFG.colors.bg,
+      fg: isHex(c.colors?.fg) ? c.colors!.fg : DEFAULT_CFG.colors.fg,
+      accent: isHex(c.colors?.accent) ? c.colors!.accent : DEFAULT_CFG.colors.accent,
     },
     logoUrl: typeof c.logoUrl === "string" || c.logoUrl === null ? c.logoUrl : null,
     titleLines:
@@ -70,8 +69,8 @@ function norm(cfg?: PatientPageConfig) {
         c.background?.type === "gradient" || c.background?.type === "solid"
           ? c.background.type
           : DEFAULT_CFG.background.type,
-      color1: isHex(c.background?.color1) ? c.background.color1 : DEFAULT_CFG.background.color1,
-      color2: isHex(c.background?.color2) ? c.background.color2 : DEFAULT_CFG.background.color2,
+      color1: isHex(c.background?.color1) ? c.background!.color1! : DEFAULT_CFG.background.color1,
+      color2: isHex(c.background?.color2) ? c.background!.color2! : DEFAULT_CFG.background.color2,
       direction:
         (["to-b", "to-r", "to-tr", "to-br"] as const).includes(c.background?.direction as any)
           ? (c.background?.direction as any)
@@ -99,6 +98,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
 
   const cfg = norm(safeParse(hospital.themeJson));
   const notice = sanitize(hospital.noticeHtml ?? undefined);
+  const logoUrl = cfg.logoUrl ?? hospital.logoUrl ?? null; // 폴백
 
   const bgStyle: CSSProperties =
     cfg.background.type === "gradient" && cfg.background.color2
@@ -117,7 +117,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
 
   return (
     <main className="relative min-h-screen overflow-x-hidden" style={bgStyle}>
-      {/* 액센트 글로우 (이제 cfg.colors.accent는 항상 string이므로 안전합니다) */}
+      {/* 액센트 글로우 */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div
           className="absolute -top-56 -left-56 h-[720px] w-[720px] rounded-full blur-[120px] opacity-20"
@@ -138,9 +138,9 @@ export default async function RLanding({ params }: { params: { tenant: string } 
                 {hospital.name} 검진 예약
               </div>
 
-              {cfg.logoUrl ? (
+              {logoUrl ? (
                 <img
-                  src={cfg.logoUrl}
+                  src={logoUrl}
                   alt="logo"
                   className="mx-auto mt-1"
                   style={{ maxWidth: 200, height: "auto" }}
@@ -189,5 +189,6 @@ export default async function RLanding({ params }: { params: { tenant: string } 
     </main>
   );
 }
+
 
 
