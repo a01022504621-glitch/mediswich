@@ -32,8 +32,8 @@ const DEFAULT_CFG: Required<PatientPageConfig> = {
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
 };
 
-/** 첫 인자를 unknown으로 받아 undefined/null도 허용 */
-function hex(x: unknown, d: string): string {
+/** unknown 허용 → 유효한 hex(#rgb | #rrggbb)만 통과 */
+function coerceHex(x: unknown, d: string): string {
   return typeof x === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(x) ? x : d;
 }
 function safeParse(s: string | null | undefined) {
@@ -50,23 +50,23 @@ function norm(cfg?: PatientPageConfig): Required<PatientPageConfig> {
       ? (c.themePreset as any)
       : DEFAULT_CFG.themePreset,
     colors: {
-      bg: hex(c.colors?.bg, DEFAULT_CFG.colors.bg),
-      fg: hex(c.colors?.fg, DEFAULT_CFG.colors.fg),
-      accent: hex(c.colors?.accent, DEFAULT_CFG.colors.accent),
+      bg: coerceHex(c.colors?.bg, DEFAULT_CFG.colors.bg),
+      fg: coerceHex(c.colors?.fg, DEFAULT_CFG.colors.fg),
+      accent: coerceHex(c.colors?.accent, DEFAULT_CFG.colors.accent),
     },
     logoUrl: typeof c.logoUrl === "string" || c.logoUrl === null ? c.logoUrl : null,
     titleLines:
       Array.isArray(c.titleLines) && c.titleLines.length
         ? c.titleLines.map(String).slice(0, 6)
         : DEFAULT_CFG.titleLines,
-    titleColor: hex(c.titleColor, DEFAULT_CFG.titleColor),
+    titleColor: coerceHex(c.titleColor, DEFAULT_CFG.titleColor),
     background: {
       type:
         c.background?.type === "gradient" || c.background?.type === "solid"
           ? c.background.type
           : DEFAULT_CFG.background.type,
-      color1: hex(c.background?.color1, DEFAULT_CFG.background.color1),
-      color2: hex(c.background?.color2, DEFAULT_CFG.background.color2),
+      color1: coerceHex(c.background?.color1, DEFAULT_CFG.background.color1),
+      color2: coerceHex(c.background?.color2, DEFAULT_CFG.background.color2),
       direction:
         (["to-b", "to-r", "to-tr", "to-br"] as const).includes(c.background?.direction as any)
           ? (c.background?.direction as any)
@@ -184,5 +184,6 @@ export default async function RLanding({ params }: { params: { tenant: string } 
     </main>
   );
 }
+
 
 
