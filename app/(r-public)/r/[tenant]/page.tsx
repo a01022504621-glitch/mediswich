@@ -32,10 +32,12 @@ const DEFAULT_CFG: Required<PatientPageConfig> = {
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
 };
 
-/** unknown 허용 → 유효한 hex(#rgb | #rrggbb)만 통과 */
-function coerceHex(x: unknown, d: string): string {
-  return typeof x === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(x) ? x : d;
+/* 유효 hex 색상인지 판별하는 타입가드 */
+const RE_HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+function isHex(x: unknown): x is string {
+  return typeof x === "string" && RE_HEX.test(x);
 }
+
 function safeParse(s: string | null | undefined) {
   try {
     return s ? (JSON.parse(s) as PatientPageConfig) : undefined;
@@ -50,23 +52,23 @@ function norm(cfg?: PatientPageConfig): Required<PatientPageConfig> {
       ? (c.themePreset as any)
       : DEFAULT_CFG.themePreset,
     colors: {
-      bg: coerceHex(c.colors?.bg, DEFAULT_CFG.colors.bg),
-      fg: coerceHex(c.colors?.fg, DEFAULT_CFG.colors.fg),
-      accent: coerceHex(c.colors?.accent, DEFAULT_CFG.colors.accent),
+      bg: isHex(c.colors?.bg) ? c.colors!.bg : DEFAULT_CFG.colors.bg,
+      fg: isHex(c.colors?.fg) ? c.colors!.fg : DEFAULT_CFG.colors.fg,
+      accent: isHex(c.colors?.accent) ? c.colors!.accent : DEFAULT_CFG.colors.accent,
     },
     logoUrl: typeof c.logoUrl === "string" || c.logoUrl === null ? c.logoUrl : null,
     titleLines:
       Array.isArray(c.titleLines) && c.titleLines.length
         ? c.titleLines.map(String).slice(0, 6)
         : DEFAULT_CFG.titleLines,
-    titleColor: coerceHex(c.titleColor, DEFAULT_CFG.titleColor),
+    titleColor: isHex(c.titleColor) ? c.titleColor : DEFAULT_CFG.titleColor,
     background: {
       type:
         c.background?.type === "gradient" || c.background?.type === "solid"
           ? c.background.type
           : DEFAULT_CFG.background.type,
-      color1: coerceHex(c.background?.color1, DEFAULT_CFG.background.color1),
-      color2: coerceHex(c.background?.color2, DEFAULT_CFG.background.color2),
+      color1: isHex(c.background?.color1) ? c.background!.color1! : DEFAULT_CFG.background.color1,
+      color2: isHex(c.background?.color2) ? c.background!.color2! : DEFAULT_CFG.background.color2,
       direction:
         (["to-b", "to-r", "to-tr", "to-br"] as const).includes(c.background?.direction as any)
           ? (c.background?.direction as any)
@@ -184,6 +186,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
     </main>
   );
 }
+
 
 
 
