@@ -23,7 +23,8 @@ type PatientPageConfig = {
   };
 };
 
-const DEFAULT_CFG: Required<PatientPageConfig> = {
+// [수정 1] : Required<PatientPageConfig> 타입 선언 제거
+const DEFAULT_CFG = {
   themePreset: "modern",
   colors: { bg: "#EEF4FF", fg: "#0F172A", accent: "#3B82F6" },
   logoUrl: null,
@@ -45,16 +46,18 @@ function safeParse(s: string | null | undefined) {
     return undefined;
   }
 }
-function norm(cfg?: PatientPageConfig): Required<PatientPageConfig> {
+
+// [수정 2] : Required<PatientPageConfig> 반환 타입 선언 제거
+function norm(cfg?: PatientPageConfig) {
   const c = cfg || {};
   return {
     themePreset: (["modern", "warm", "trust", "classic"] as const).includes(c.themePreset as any)
       ? (c.themePreset as any)
       : DEFAULT_CFG.themePreset,
     colors: {
-      bg: isHex(c.colors?.bg) ? c.colors!.bg : DEFAULT_CFG.colors.bg,
-      fg: isHex(c.colors?.fg) ? c.colors!.fg : DEFAULT_CFG.colors.fg,
-      accent: isHex(c.colors?.accent) ? c.colors!.accent : DEFAULT_CFG.colors.accent,
+      bg: isHex(c.colors?.bg) ? c.colors.bg : DEFAULT_CFG.colors.bg,
+      fg: isHex(c.colors?.fg) ? c.colors.fg : DEFAULT_CFG.colors.fg,
+      accent: isHex(c.colors?.accent) ? c.colors.accent : DEFAULT_CFG.colors.accent,
     },
     logoUrl: typeof c.logoUrl === "string" || c.logoUrl === null ? c.logoUrl : null,
     titleLines:
@@ -67,8 +70,8 @@ function norm(cfg?: PatientPageConfig): Required<PatientPageConfig> {
         c.background?.type === "gradient" || c.background?.type === "solid"
           ? c.background.type
           : DEFAULT_CFG.background.type,
-      color1: isHex(c.background?.color1) ? c.background!.color1! : DEFAULT_CFG.background.color1,
-      color2: isHex(c.background?.color2) ? c.background!.color2! : DEFAULT_CFG.background.color2,
+      color1: isHex(c.background?.color1) ? c.background.color1 : DEFAULT_CFG.background.color1,
+      color2: isHex(c.background?.color2) ? c.background.color2 : DEFAULT_CFG.background.color2,
       direction:
         (["to-b", "to-r", "to-tr", "to-br"] as const).includes(c.background?.direction as any)
           ? (c.background?.direction as any)
@@ -114,7 +117,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
 
   return (
     <main className="relative min-h-screen overflow-x-hidden" style={bgStyle}>
-      {/* 액센트 글로우 */}
+      {/* 액센트 글로우 (이제 cfg.colors.accent는 항상 string이므로 안전합니다) */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div
           className="absolute -top-56 -left-56 h-[720px] w-[720px] rounded-full blur-[120px] opacity-20"
@@ -186,7 +189,5 @@ export default async function RLanding({ params }: { params: { tenant: string } 
     </main>
   );
 }
-
-
 
 
