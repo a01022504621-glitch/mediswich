@@ -32,7 +32,8 @@ const DEFAULT_CFG: Required<PatientPageConfig> = {
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
 };
 
-function hex(x: string | null | undefined, d: string) {
+/** 첫 인자를 unknown으로 받아 undefined/null도 허용 */
+function hex(x: unknown, d: string): string {
   return typeof x === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(x) ? x : d;
 }
 function safeParse(s: string | null | undefined) {
@@ -45,9 +46,7 @@ function safeParse(s: string | null | undefined) {
 function norm(cfg?: PatientPageConfig): Required<PatientPageConfig> {
   const c = cfg || {};
   return {
-    themePreset: (["modern", "warm", "trust", "classic"] as const).includes(
-      c.themePreset as any
-    )
+    themePreset: (["modern", "warm", "trust", "classic"] as const).includes(c.themePreset as any)
       ? (c.themePreset as any)
       : DEFAULT_CFG.themePreset,
     colors: {
@@ -69,9 +68,7 @@ function norm(cfg?: PatientPageConfig): Required<PatientPageConfig> {
       color1: hex(c.background?.color1, DEFAULT_CFG.background.color1),
       color2: hex(c.background?.color2, DEFAULT_CFG.background.color2),
       direction:
-        (["to-b", "to-r", "to-tr", "to-br"] as const).includes(
-          c.background?.direction as any
-        )
+        (["to-b", "to-r", "to-tr", "to-br"] as const).includes(c.background?.direction as any)
           ? (c.background?.direction as any)
           : DEFAULT_CFG.background.direction,
     },
@@ -187,4 +184,5 @@ export default async function RLanding({ params }: { params: { tenant: string } 
     </main>
   );
 }
+
 
