@@ -31,7 +31,7 @@ const DEFAULT_CFG: Required<PatientPageConfig> = {
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
 };
 
-function hex(x?: string, d: string) {
+function hex(x: string | undefined, d: string) {
   return typeof x === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(x) ? x : d;
 }
 function safeParse(s?: string) {
