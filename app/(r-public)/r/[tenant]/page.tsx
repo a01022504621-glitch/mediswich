@@ -1,9 +1,10 @@
-// /app/(r-public)/r/[tenant]/page.tsx
+// app/(r-public)/r/[tenant]/page.tsx
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 import CatalogClient from "./_components/CatalogClient.client";
+import type { CSSProperties } from "react";
 
 export const revalidate = 120;
 
@@ -31,10 +32,10 @@ const DEFAULT_CFG: Required<PatientPageConfig> = {
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
 };
 
-function hex(x: string | undefined, d: string) {
+function hex(x: string | null | undefined, d: string) {
   return typeof x === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(x) ? x : d;
 }
-function safeParse(s?: string) {
+function safeParse(s: string | null | undefined) {
   try {
     return s ? (JSON.parse(s) as PatientPageConfig) : undefined;
   } catch {
@@ -85,11 +86,9 @@ export default async function RLanding({ params }: { params: { tenant: string } 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
 
-  // 기존 시그니처 유지
   const t = await resolveTenantHybrid({ slug: params.tenant, host });
   if (!t) notFound();
 
-  // 테마/로고 포함 조회
   const hospital = await prisma.hospital.findUnique({
     where: { id: t.id },
     select: { slug: true, name: true, noticeHtml: true, themeJson: true, logoUrl: true },
@@ -99,8 +98,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
   const cfg = norm(safeParse(hospital.themeJson));
   const notice = sanitize(hospital.noticeHtml ?? undefined);
 
-  // 배경 적용
-  const bgStyle: React.CSSProperties =
+  const bgStyle: CSSProperties =
     cfg.background.type === "gradient" && cfg.background.color2
       ? {
           backgroundImage: `linear-gradient(${
