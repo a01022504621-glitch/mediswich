@@ -52,12 +52,17 @@ const lsSet = (k: string, v: string) => {
 async function getCalendar(month: string) {
   const r = await fetch(`/api/capacity/calendar?month=${month}`, { cache: "no-store" });
   const j = await r.json().catch(() => ({}));
-  const map = (j?.days ?? {}) as Record<YMD, DayBox>;
-  for (const iso of Object.keys(map)) {
-    const c = map[iso]?.closed ?? {};
-    map[iso].closed = { ...c, special: Boolean(c.special || c.col) };
-  }
-  return map;
+  type YMD = `${number}-${number}-${number}`;
+
+const map = (j?.days ?? {}) as Partial<Record<YMD, DayBox>>;
+
+// entries를 [YMD, DayBox][] 로 단언해 타입 일치
+for (const [iso, box] of Object.entries(map) as [YMD, DayBox][]) {
+  const c = box.closed ?? {};
+  box.closed = { ...c, special: Boolean((c as any).special || (c as any).col) };
+}
+
+return map as Record<YMD, DayBox>;
 }
 
 async function getDefaults(): Promise<{
