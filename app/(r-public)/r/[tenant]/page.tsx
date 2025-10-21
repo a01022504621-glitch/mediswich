@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /* --- 타입 및 기본값 --- */
+type NoticeItem = { title?: string; icon?: string; lines?: string[] };
+
 type PatientPageConfig = {
   themePreset?: "modern" | "warm" | "trust" | "classic";
   colors?: { bg?: string; fg?: string; accent?: string };
@@ -22,6 +24,7 @@ type PatientPageConfig = {
     color2?: string;
     direction?: "to-b" | "to-r" | "to-tr" | "to-br";
   };
+  noticeItems?: NoticeItem[];
 };
 
 const DEFAULT_CFG = {
@@ -31,6 +34,7 @@ const DEFAULT_CFG = {
   titleLines: ["Health Checkup Center"],
   titleColor: "#0F172A",
   background: { type: "solid", color1: "#F9FAFB", color2: "#FFFFFF", direction: "to-b" },
+  noticeItems: [] as NoticeItem[],
 } as const;
 
 /* 유효 hex 색상 타입가드 */
@@ -76,6 +80,15 @@ function norm(cfg?: PatientPageConfig) {
           ? (c.background?.direction as any)
           : DEFAULT_CFG.background.direction,
     },
+    noticeItems: Array.isArray(c.noticeItems)
+      ? c.noticeItems
+          .map((n) => ({
+            title: typeof n?.title === "string" ? n.title : "",
+            icon: typeof n?.icon === "string" ? n.icon : "",
+            lines: Array.isArray(n?.lines) ? n.lines!.map(String).slice(0, 12) : [],
+          }))
+          .filter((n) => n.title || n.lines.length)
+      : DEFAULT_CFG.noticeItems,
   };
 }
 
@@ -98,7 +111,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
 
   const cfg = norm(safeParse(hospital.themeJson));
   const notice = sanitize(hospital.noticeHtml ?? undefined);
-  const logoUrl = cfg.logoUrl ?? hospital.logoUrl ?? null; // 폴백
+  const logoUrl = cfg.logoUrl ?? hospital.logoUrl ?? null;
 
   const bgStyle: CSSProperties =
     cfg.background.type === "gradient" && cfg.background.color2
@@ -161,8 +174,28 @@ export default async function RLanding({ params }: { params: { tenant: string } 
             </div>
           </div>
 
-          {/* 공지 */}
-          {notice ? (
+          {/* 공지: themeJson.noticeItems 우선, 없으면 noticeHtml */}
+          {cfg.noticeItems.length > 0 ? (
+            <div className="px-4 pb-5 pt-0">
+              {cfg.noticeItems.map((n, idx) => (
+                <div key={idx} className="mb-3 rounded-xl bg-white/90 p-3 shadow-sm ring-1 ring-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold" style={{ color: cfg.colors.accent }}>
+                      {n.icon || "📢"} {n.title || "공지"}
+                    </span>
+                    <div className="h-px grow" style={{ background: `${cfg.colors.accent}33` }} />
+                  </div>
+                  {n.lines?.length ? (
+                    <ul className="mt-2 list-disc pl-5 text-sm leading-snug" style={{ color: cfg.colors.fg }}>
+                      {n.lines.map((l, j) => (
+                        <li key={j}>{l}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : notice ? (
             <div className="px-4 pb-5 pt-0">
               <div className="rounded-xl bg-white/90 p-3 shadow-sm ring-1 ring-slate-100">
                 <div className="flex items-center gap-2">
