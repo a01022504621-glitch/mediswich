@@ -413,3 +413,65 @@ details[open] > summary.faq-question { background-color: #e3f2fd; color: var(--c
         padding-top: 15px;
     }
 }
+/* -------------------- 19. Hero 체크 아이콘 스타일 (추가) -------------------- */
+.trust-icons .check-icon {
+    color: var(--color-secondary); /* Mint Green */
+    font-weight: var(--font-weight-bold);
+    margin-right: 5px; /* 텍스트와 간격 */
+    font-size: 1em; /* 기본 폰트 크기 유지 */
+}
+
+/* 체크 아이콘 간의 간격 조정 */
+.trust-icons .check-icon + .check-icon {
+    margin-left: 10px; /* 아이콘끼리 너무 붙지 않게 */
+}
+
+/* -------------------- 20. Footer Startup Style (추가) -------------------- */
+.footer .container {
+    /* 기존: align-items: center -> flex-start (상단 정렬) */
+    align-items: flex-start;
+}
+
+.footer-info {
+    font-size: 0.85rem;
+    line-height: 1.7;
+}
+
+.footer-info .company-name {
+    font-size: 1rem;
+    font-weight: var(--font-weight-bold);
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.footer-info p {
+    margin-bottom: 2px;
+}
+
+.footer-links {
+    /* [수정] 링크들을 세로로 정렬하고 우측 정렬 */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end; 
+    gap: 10px;
+}
+
+.footer-links a {
+    margin-left: 0; /* 기존 margin-left 제거 */
+    text-align: right;
+}
+
+/* 모바일 반응형 수정 */
+@media (max-width: 768px) {
+    .footer .container {
+        align-items: center; /* 모바일에선 다시 중앙 정렬 */
+    }
+    .footer-links {
+        align-items: center; /* 모바일에선 다시 중앙 정렬 */
+        gap: 5px;
+        margin-top: 20px;
+    }
+    .footer-links a {
+        margin: 5px 10px; /* 모바일용 마진 복구 */
+    }
+}
