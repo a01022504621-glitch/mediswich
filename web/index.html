@@ -3,120 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메디?�위�?MediSwich) - 병원 ?�영???�로??기�????�시?�다.</title>
+    
+    <meta name="naver-site-verification" content="3d5cba6f7010b772ba62c31664354a6f77f86b51" />
+    
+    <title>메디스위치 | 병원 운영 자동화 SaaS</title>
+
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="custom.css">
 </head>
 <body>
 
     <header class="header">
         <div class="container">
-            <a href="#" class="logo scale-in" aria-label="??>
-                <picture class="logo-picture">
-                    <source srcset="logo-icon.svg" type="image/svg+xml">
-                    <source srcset="logo-icon.png" type="image/png">
-                    <img src="logo.png" alt="MediSwich 로고" class="logo-img">
-                </picture>
-            </a>
-            <nav class="nav">
-                <a href="#value" class="nav-item fade-in-up delay-1">?�심 가�?/a>
-                <a href="#features" class="nav-item fade-in-up delay-2">기능 ?�신</a>
-                <a href="#security" class="nav-item fade-in-up delay-3">보안 �??�뢰</a>
-                <a href="#cta-footer" class="nav-item fade-in-up delay-4">?�모 ?�청</a>
-            </nav>
-            <a href="#" class="cta-button primary scale-in delay-5">?�문가 ?�모 ?�청</a>
+            <a href="/index" class="logo scale-in">MediSwich</a>
+            <div class="header-right">
+                <nav class="nav">
+                    <a href="/index" class="nav-item active fade-in-up delay-1">홈</a>
+                    <a href="/why-mediswich" class="nav-item fade-in-up delay-2">왜 메디스위치인가?</a>
+                    <div class="dropdown fade-in-up delay-3">
+                        <a href="/features" class="nav-item">핵심 기능</a>
+                        <div class="dropdown-content">
+                            <a href="/features#admin-portal">관리자 포털</a>
+                            <a href="/features#patient-portal">예약자 셀프서비스</a>
+                            <a href="/features#corporate-portal">기업 포털</a>
+                            <a href="/features#security">보안 및 기술</a>
+                        </div>
+                    </div>
+                    <a href="/contact" class="nav-item fade-in-up delay-5">고객문의</a>
+                </nav>
+                <button id="open-contact-modal" class="cta-button primary scale-in delay-6">도입 문의하기</button>
+            </div>
         </div>
     </header>
 
-    <section class="hero">
+    <section id="hero" class="hero">
         <div class="container">
-            <h1 class="fade-in-up">병원 ?�영??비효?? <br> 메디?�위�? ?�신?�인 ?�율??켜다.</h1>
-            <p class="subtitle fade-in-up delay-1">MediSwich??비효?�적???�화 ?�래?�을 최소?�하�? 모든 ?�직?�의 <br class="mobile-only">?�간??고�?가가�??��???집중?�키??병원 ?�용 AI 기반 ?�약 ?�랫?�입?�다.</p>
+            <h1 class="fade-in-up">끝없는 예약 전화, <br> 이제 AI SaaS가 해결합니다.</h1>
+            <p class="subtitle fade-in-up delay-1">메디스위치는 병원 검진 운영의 새로운 표준입니다. <br>상담원은 핵심 업무에 집중하고, 예약자는 스스로 모든 것을 해결합니다.</p>
+            
             <div class="hero-actions fade-in-up delay-2">
-                <a href="#" class="cta-button primary large animate-pulse">지�?30??무료 체험 ?�작</a>
-                <a href="#" class="cta-button secondary large">?�공?�인 ?�입 ?��? ?�인?�기</a>
+                <a href="/contact" class="cta-button primary large animate-pulse">지금 바로 운영 혁신하기</a>
+                <a href="/features" class="cta-button secondary large">핵심 기능 둘러보기</a>
             </div>
             <div class="trust-icons fade-in-up delay-3">
-                <p>???�??검진센??�??�문병원 50�??�상 ?�입 ?�료 | ?�� �?�� ?��? ?�보보호 ?�스???�영</p>
+                <p>✓ 인력은 그대로, 처리량은 2배로 ✓ 예약 오류 0%에 도전 ✓ 데이터 기반 경영 실현</p>
             </div>
         </div>
     </section>
-
-    <section id="value" class="value-prop">
+    
+    <section class="value-prop">
         <div class="container">
-            <h2 class="slide-in-left">?�영 ?�율???�겨�??�을 ?�거?�고, <br> MediSwich가 ?�래?�을 ?�위�?��?�다.</h2>
+            <h2 class="slide-in-left">모두가 편해지는 검진 운영의 혁신</h2>
             <div class="value-grid-new">
                 
                 <div class="value-card-new fade-in-up delay-1 hover-effect">
-                    <div class="icon-circle pop-in">?��</div>
-                    <h3>비효???�콜 ?�래?�의 본질???�소</h3>
-                    <p class="card-lead">?�순 ?�약 문의???�보 ?�인???�한 ?�화가 ?�직???�간??과도?�게 ?�유?�고 ?�나?? MediSwich ?�랫?��? ?�러??비핵???�래?�을 24?�간 ?�동 처리?�으로써 ?�직?�이 ?��? ?�질??결정?�인 ?�층 ?�담?�나 긴급 콜에 ?�전??집중?????�도�?지?�합?�다. ?�는 ?�화 ?��??�간�?불필?�한 ?�력 ??���?근본?�으�??�소?�여 병원 ?�영???�산?�을 극�??�합?�다.</p>
-                    <p class="card-metric">콜센???�간 ?�감 ?�과: 최�? 40%</p>
+                    <div class="icon-circle pop-in">🏥</div>
+                    <h3>병원/검진센터</h3>
+                    <p class="card-lead">복잡한 패키지 설계, 용량 관리, 정산을 하나의 대시보드에서 해결하세요. 반복 인콜이 40% 이상 감소하고, 상담원은 고부가가치 업무에 집중하여 매출이 증대됩니다.</p>
                 </div>
                 
                 <div class="value-card-new fade-in-up delay-2 hover-effect">
-                    <div class="icon-circle pop-in">?�️</div>
-                    <h3>?�약 ?�정 ?�웃�??�간 90% 감축</h3>
-                    <p class="card-lead">기존 ?�약 ?�스?��? ?�약 ?�정???�한 번거로운 ?�웃콜과 조율 과정???�반?�니?? MediSwich??고객???�직?�들??검????�� ?�택, ?�짜 �??�간 ?�정까�? 모든 과정???�랫?�에??직접 ?�료?�도�??�도?�니?? ??'?�마???�???�정' ?�로?�스???�직?�의 ?�웃�??�화 ?�간??극적?�로 ?�축?�키�? ?�보???�간?� 보다 ?�략?�이�?고�?가가�??�무???�용?????�게 ?�니??</p>
-                    <p class="card-metric">?�균 ?�약 처리 ?�간: 7�???30�?/p>
+                    <div class="icon-circle pop-in">👤</div>
+                    <h3>예약자 (환자/임직원)</h3>
+                    <p class="card-lead">더 이상 전화 대기는 없습니다. 기업/개인 유형에 맞춰 자동 적용된 패키지를 24시간 언제든 PC나 모바일에서 직접 선택하고, 문진표 작성까지 한번에 끝냅니다.</p>
                 </div>
 
                 <div class="value-card-new fade-in-up delay-3 hover-effect">
-                    <div class="icon-circle pop-in">?��</div>
-                    <h3>24/7 고객??맞춤??모바??경험 ?�공</h3>
-                    <p class="card-lead">MediSwich??병원별로 맞춤 ?�정??직�??�인 모바???�랫?�을 ?�해 고객???�직?�에�?최상???�약 ?�의?�을 ?�공?�니?? ?�제 ?�디?�든 ?�하??검?��? ?�류 ?�이 즉시 ?�정 가?�하�? ?�로??불필?�한 ?�약 ?�류?�이 ?�??감소?�고 고객 만족?��? ?�연?�럽�??�승?�는 긍정?�인 ?�순?�이 ?�성?�니?? ?�것??바로 Mediswich가 ?�시?�는 ?�약 경험???�로???��??�니??</p>
-                    <p class="card-metric">고객 만족???�승: +25% ?�상</p>
+                    <div class="icon-circle pop-in">🏢</div>
+                    <h3>계약 기업 (고객사)</h3>
+                    <p class="card-lead">임직원 명단 업로드, 검진 진행 현황 트래킹, 결과 정산을 전용 포털에서 투명하게 확인하세요. 미수검자 관리와 비용 처리가 간편해집니다.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section id="features" class="features">
+    <section class="comparison-section-new">
         <div class="container">
-            <h2 class="slide-in-right">MediSwich???�신?�인 기능?�로 <br> 병원 ?�영???�로??차원?�로 ?�끌?��??�요.</h2>
-            <div class="bento-grid">
-                
-                <div class="grid-item large fade-in-up delay-1">
-                    <h3>1. AI 기반 ?�시�?검??�??��?�??�합 관�?/h3>
-                    <p>?�료�? ?�비, 검?�실???��?줄을 ?�시간으�?분석?�고 ?�측?�여 ?�중 ?�약 ?�는 최적?�된 ?�선?�로 ?�동 배정?�니?? Mediswich ?�스?��? ??�� 가???�율?�인 ?�영 방안???�시?�여, 복잡???�기 관리나 분산???�이?�로 ?�한 ?�영?�의 비효?�을 강력??AI ?�진????번에 ?�결?�니??</p>
-                    <img src="placeholder_dashboard.svg" alt="?�약 ?�합 ?�?�보???�면" class="scale-in"> 
+            <h2 class="slide-in-right">기존의 비효율, 이렇게 바뀝니다.</h2>
+            <div class="comparison-card-grid">
+                <div class="comparison-item fade-in-up">
+                    <div class="problem-card">
+                        <div class="icon-header"><span class="emoji">🚫</span> BEFORE</div>
+                        <h3>전화와 엑셀의 수렁</h3>
+                        <p>끝없는 인콜 응대, 수기 장부 관리, 복잡한 기업별 패키지 확인, 반복되는 예약 오류와 정산 누락. 이 모든 것이 인건비 상승과 고객 불만으로 이어집니다.</p>
+                    </div>
+                    <div class="icon-center">➡️</div>
+                    <div class="solution-card">
+                        <div class="icon-header"><span class="emoji">💡</span> AFTER with MediSwich</div>
+                        <h3>자동화된 워크플로우</h3>
+                        <p>AI 챗봇과 자동 알림이 인콜을 막고, 용량 캘린더가 예약을 통제하며, 통합 대시보드가 실시간 데이터를 제공합니다. 병원은 핵심 경쟁력에만 집중할 수 있습니다.</p>
+                    </div>
                 </div>
-                
-                <div class="grid-item fade-in-up delay-2">
-                    <h3>2. ?�마???�동 ?�림 �??�쇼???�기??감소</h3>
-                    <p>?�약 ?�료, 검????D-Day ?�림, ?�약 변�??�내 ?�이 카카?�톡/문자�??�동?�로 발송?�어 고객 ?�락??방�??�고 ?�쇼?�을 ?�기?�으�???��?�다. 고객?� ?�요???�보�??�시???�달받아 병원 방문???�??준비도�??�일 ???�으�? 병원?� 불필?�한 공백 ?�간??최소?�할 ???�습?�다.</p>
-                </div>
-
-                <div class="grid-item fade-in-up delay-3">
-                    <h3>3. 직�??�인 ?�이???�?�보??�??�략 ?�립</h3>
-                    <p>?�약�? ?�쇼?? 검???�호?? ?�간?��??�래????병원 ?�영???�심 지?�들???�각?�된 ?�?�보?�로 ?�눈???�공?�니?? ???�층 ?�이?��? 기반?�로 ?�음 ?�즌??마�???�??�영 ?�략???�교?�게 ?�립?�여, ?�이???�리�?경영???�한 지?�적???�장??가?�하�??�니??</p>
-                </div>
-                
             </div>
         </div>
     </section>
 
-    <section id="security" class="security-section">
+    <section class="cta-footer">
         <div class="container">
-            <div class="security-content fade-in-up">
-                <h2>최고 ?��???보안�??�뢰, <br> 귀?�의 ?�료 ?�이?��? 빈틈?�이 지?�니??</h2>
-                <p>?�자??민감???�료 ?�보?� 병원???�심 ?�영 ?�이?�는 MediSwich???�중 ?�호???�스??�??�격??관�?체계 ?�에??가???�전?�게 보호?�니?? ?�?�는 ?�뢰�?기반?�로 ?�는 ?�료 SaaS ?�비?�로?? 고객???�이??보안??최우??가치로 ?�습?�다.</p>
-                <ul class="security-list slide-in-left">
-                    <li>?? �?��???�료 규정 ?�벽 준?? 개인?�보 보호�?�?�?�� ?��? HIPAA 가?�드?�인??철�???준?�합?�다.</li>
-                    <li>?? ?�보보호 경영?�스???�증: ISO 27001 ?�증 기반???�격??보안 ?�로?�스�??�영?�니??</li>
-                    <li>?? 최첨???�이???�호?? 모든 ?�이???�신 �??�??구간??SSL/TLS ?�호?��? ?�용?�여 무단 ?�근??차단?�니??</li>
-                    <li>?? ?�기?�인 보안 감사: ?��? ?�문가�??�한 ?�기?�인 보안 감사 �?취약??진단?�로 ?�스?�의 견고?�을 ?��??�니??</li>
-                </ul>
-                <a href="#" class="cta-button secondary bounce-in">MediSwich 보안 ?�책 ?�세 보고???�청</a>
-            </div>
-        </div>
-    </section>
-
-    <section id="cta-footer" class="cta-footer">
-        <div class="container">
-            <h2 class="fade-in-up">병원 ?�영??비효?�을 멈추�? <br> MediSwich�??�도?�인 ?�장??지�??�위치하?�요.</h2>
-            <a href="#" class="cta-button primary massive animate-pulse fade-in-up delay-1">?�담 �??�휴 문의?�기</a>
+            <h2 class="fade-in-up">병원의 성장은, 운영 효율에서 시작됩니다.</h2>
+            <a href="/contact" class="cta-button massive animate-pulse fade-in-up delay-1">전문가와 상담하고 혁신 시작하기</a>
         </div>
     </section>
 
@@ -124,14 +111,28 @@
         <div class="container">
             <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
             <div class="footer-links">
-                <a href="#">?�용?��?</a>
-                <a href="#">개인?�보 처리방침</a>
-                <a href="#">문의: contact@mediswich.com</a>
+                <a href="#">이용약관</a>
+                <a href="#">개인정보처리방침</a>
+                <a href="mailto:contact@mediswich.com">문의: contact@mediswich.com</a>
             </div>
         </div>
     </footer>
-
+    
+    <div id="contact-modal" class="modal">
+        <div class="modal-content scale-in">
+            <span class="close-button">&times;</span>
+            <h3>도입 문의</h3> 
+            <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
+            <form id="contact-form-modal">
+                <div class="form-group"><label for="modal-name">이름</label><input type="text" id="modal-name" name="name" required></div>
+                <div class="form-group"><label for="modal-hospital">병원명/회사명</label><input type="text" id="modal-hospital" name="hospital" required></div>
+                <div class="form-group"><label for="modal-phone">연락처</label><input type="tel" id="modal-phone" name="phone" required></div>
+                <div class="form-group"><label for="modal-email">이메일</label><input type="email" id="modal-email" name="email" required></div>
+                <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
+            </form>
+        </div>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
-
