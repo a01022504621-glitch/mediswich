@@ -36,9 +36,9 @@
 
         .feature-image {
             flex: 1;
-            min-width: 50%;
+            min-width: 0; /* Prevent image from overflowing */
         }
-        
+
         .feature-text {
             flex: 1;
         }
@@ -51,7 +51,7 @@
         .feature-text li {
             margin-bottom: 30px;
         }
-        
+
         .feature-text h3 {
             font-size: 1.5rem;
             color: var(--color-primary);
@@ -60,7 +60,7 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .feature-text h3 i {
             font-size: 1.2rem;
             color: var(--color-secondary);
@@ -71,8 +71,8 @@
             line-height: 1.7;
             color: var(--color-text-light);
         }
-        
-        /* --- [수정됨] 목업(Mockup) 스타일 --- */
+
+        /* --- 목업(Mockup) 스타일 --- */
         .mockup-wrapper {
             width: 100%;
             border-radius: 12px;
@@ -82,36 +82,48 @@
             overflow: hidden;
             font-family: 'Pretendard', sans-serif;
         }
-        
-        /* 1. 관리자/기업 포털 목업 (사이드바 추가) */
+
+        /* [수정] 관리자/기업 포털 목업 */
         .mockup-admin {
             display: flex;
             background: #F9FAFB;
         }
         .mockup-admin-sidebar {
-            width: 200px; /* 사이드바 너비 */
-            background: linear-gradient(180deg, #0070f3 0%, #005bb5 100%); /* 파란색 그라데이션 */
-            padding: 20px;
-            color: white;
+            width: 160px; /* 너비 추가 축소 */
+            background: linear-gradient(180deg, #0070f3 0%, #005bb5 100%);
+            padding: 20px 15px;
+            color: rgba(255, 255, 255, 0.8);
+            flex-shrink: 0;
         }
         .mockup-admin-sidebar .logo {
             font-weight: 700;
-            font-size: 1.2rem;
-            margin-bottom: 30px;
+            font-size: 1.1rem; /* 약간 축소 */
+            margin-bottom: 25px; /* 간격 조정 */
+            color: #fff;
+            word-break: break-all;
         }
         .mockup-admin-sidebar .menu-item {
-            padding: 10px 12px;
+            padding: 8px 10px; /* 패딩 약간 축소 */
             border-radius: 6px;
-            font-size: 0.9rem;
+            font-size: 0.85rem; /* 약간 축소 */
             margin-bottom: 5px;
+            cursor: default;
+            transition: background-color 0.2s ease;
+            white-space: nowrap; /* 줄바꿈 방지 */
+            overflow: hidden;
+            text-overflow: ellipsis; /* 넘치면 ... */
         }
+         .mockup-admin-sidebar .menu-item:not(.active):hover {
+             background-color: rgba(255, 255, 255, 0.1);
+         }
         .mockup-admin-sidebar .menu-item.active {
             background-color: rgba(255, 255, 255, 0.2);
             font-weight: 600;
+            color: #fff;
         }
         .mockup-admin-body {
             flex: 1;
-            min-width: 0; /* flex-shrink 문제 방지 */
+            min-width: 0;
         }
         .mockup-admin-header {
             background: #fff;
@@ -131,43 +143,53 @@
             color: #9CA3AF;
         }
         .mockup-admin-content {
-            padding: 24px;
+            padding: 20px; /* 패딩 약간 축소 */
         }
         .mockup-card-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 24px;
+            /* [수정] 반응형 그리드 */
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 12px; /* 간격 약간 축소 */
+            margin-bottom: 20px; /* 간격 조정 */
         }
         .mockup-card {
             background: #fff;
-            padding: 15px;
+            padding: 12px; /* 패딩 약간 축소 */
             border-radius: 8px;
             border: 1px solid var(--color-border);
+            text-align: center; /* 카드 내용 중앙 정렬 */
         }
         .mockup-card .label {
-            font-size: 0.85rem;
+            font-size: 0.8rem; /* 크기 축소 */
             color: var(--color-text-light);
-            margin-bottom: 5px;
+            margin-bottom: 6px; /* 간격 조정 */
+            white-space: nowrap; /* 줄바꿈 방지 */
         }
         .mockup-card .value {
-            font-size: 1.5rem;
-            font-weight: 800;
+            font-size: 1.5rem; /* 크기 유지 또는 약간 축소 */
+            font-weight: 700; /* Bold 강조 */
             color: var(--color-text-dark);
+            min-height: 28px;
+            line-height: 1.2; /* 숫자 높이 조정 */
+        }
+        .mockup-card .unit {
+            font-size: 0.9rem; /* 크기 조정 */
+            font-weight: 500; /* 보통 두께 */
+            color: var(--color-text-light);
+            margin-left: 2px;
         }
         .mockup-chart-box {
             background: #fff;
-            padding: 20px;
+            padding: 15px; /* 패딩 조정 */
             border-radius: 8px;
             border: 1px solid var(--color-border);
-            height: 180px;
+            height: 160px; /* 높이 약간 축소 */
         }
-        /* [신규] CSS 바 차트 스타일 */
         .mockup-bar-chart {
             display: flex;
             justify-content: space-around;
             align-items: flex-end;
-            height: 120px;
+            height: 100px; /* 차트 높이 조정 */
             padding-top: 10px;
         }
         .mockup-bar {
@@ -188,6 +210,7 @@
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
             padding: 15px;
             overflow-y: auto;
+            position: relative;
         }
         .mockup-phone::-webkit-scrollbar { display: none; }
         .mockup-phone { -ms-overflow-style: none; scrollbar-width: none; }
@@ -220,14 +243,55 @@
         }
         .lorem-bar.w-60 { width: 60%; }
         .lorem-bar.w-80 { width: 80%; }
-        
-        /* [신규] 목업 하단 설명 텍스트 */
+
         .mockup-disclaimer {
             text-align: center;
             font-size: 0.9rem;
             color: var(--color-text-light);
             margin-top: 20px;
         }
+
+        /* --- 애니메이션 스타일 --- */
+        /* 1. 막대그래프 성장 */
+        @keyframes growBar {
+          from { transform: scaleY(0); }
+          to { transform: scaleY(1); }
+        }
+        .start-bar-animation .mockup-bar {
+            transform-origin: bottom;
+            animation: growBar 1s var(--transition-smooth) forwards;
+            transform: scaleY(0);
+        }
+        .start-bar-animation .mockup-bar:nth-child(1) { animation-delay: 0.1s; }
+        .start-bar-animation .mockup-bar:nth-child(2) { animation-delay: 0.2s; }
+        .start-bar-animation .mockup-bar:nth-child(3) { animation-delay: 0.3s; }
+        .start-bar-animation .mockup-bar:nth-child(4) { animation-delay: 0.4s; }
+        .start-bar-animation .mockup-bar:nth-child(5) { animation-delay: 0.5s; }
+        .start-bar-animation .mockup-bar:nth-child(6) { animation-delay: 0.6s; }
+        .start-bar-animation .mockup-bar:nth-child(7) { animation-delay: 0.7s; }
+
+        /* 2. 손가락 탭 */
+        #tap-target-section {
+            position: relative;
+        }
+        @keyframes tapFinger {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0; }
+          10%, 90% { transform: translateY(-10px) scale(1); opacity: 1; }
+          50% { transform: translateY(-5px) scale(0.95); opacity: 1; }
+        }
+        .finger-tap-icon {
+            position: absolute;
+            bottom: 50px;
+            right: 30px;
+            font-size: 1.8rem;
+            color: var(--color-primary);
+            opacity: 0;
+            animation: tapFinger 2.5s ease-in-out infinite;
+            animation-delay: 1.5s;
+            pointer-events: none;
+            z-index: 10;
+        }
+
 
         /* 모바일 반응형 */
         @media (max-width: 900px) {
@@ -241,16 +305,7 @@
                 justify-content: center;
             }
             .mockup-admin-sidebar {
-                width: 100px; /* 모바일에서 사이드바 축소 */
-                padding: 15px 10px;
-            }
-            .mockup-admin-sidebar .logo {
-                font-size: 1rem;
-                margin-bottom: 20px;
-            }
-            .mockup-admin-sidebar .menu-item {
-                font-size: 0.8rem;
-                padding: 8px;
+                 display: none;
             }
             .mockup-admin-content {
                 padding: 15px;
@@ -260,7 +315,18 @@
                 gap: 10px;
             }
             .mockup-card .value {
-                font-size: 1.2rem;
+                font-size: 1.3rem;
+                min-height: 24px;
+            }
+             .mockup-card .label { font-size: 0.8rem; }
+            .mockup-card .unit { font-size: 0.8rem; }
+            .finger-tap-icon { font-size: 1.5rem; bottom: 40px; right: 20px; }
+        }
+        /* 데스크탑에서 카드 찌그러짐 방지 (추가) */
+        @media (max-width: 1100px) {
+             .mockup-card-grid {
+                 /* 화면이 조금 좁아지면 2열로 변경 */
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             }
         }
     </style>
@@ -299,7 +365,7 @@
 
     <section id="admin-portal" class="feature-showcase alt-bg">
         <div class="container">
-            <h2 class="slide-in-left">🏥 01. 관리자 포털</h2>
+            <h2 class="slide-in-left">🏥 01. 관리자 포털 (Control Tower)</h2>
             <p class="section-subtitle">병원의 모든 운영을 제어하고, '병원 고유의 플랫폼'을 완성합니다.</p>
             <div class="feature-layout image-left">
                 <div class="feature-image">
@@ -311,6 +377,7 @@
                                 <div class="menu-item">실시간 현황</div>
                                 <div class="menu-item">고객사 관리</div>
                                 <div class="menu-item">패키지 관리</div>
+                                <div class="menu-item">설정</div>
                             </div>
                             <div class="mockup-admin-body">
                                 <div class="mockup-admin-header">
@@ -320,22 +387,22 @@
                                     </div>
                                 </div>
                                 <div class="mockup-admin-content">
-                                    <div class="mockup-card-grid">
-                                        <div class="mockup-card">
+                                    <div class="mockup-card-grid" id="admin-mockup-cards">
+                                        <div class="mockup-card" id="admin-card-1">
                                             <div class="label">오늘 신규 요청</div>
-                                            <div class="value">108</div>
+                                            <div class="value">0</div>
                                         </div>
-                                        <div class="mockup-card">
+                                        <div class="mockup-card" id="admin-card-2">
                                             <div class="label">오늘 확정</div>
-                                            <div class="value">92</div>
+                                            <div class="value">0</div>
                                         </div>
-                                        <div class="mockup-card">
+                                        <div class="mockup-card" id="admin-card-3">
                                             <div class="label">7일 내 예약 수</div>
-                                            <div class="value">640</div>
+                                            <div class="value">0</div>
                                         </div>
-                                        <div class="mockup-card">
+                                        <div class="mockup-card" id="admin-card-4">
                                             <div class="label">오늘 가동률</div>
-                                            <div class="value">85%</div>
+                                            <div><span class="value">85</span><span class="unit">%</span></div>
                                         </div>
                                     </div>
                                     <div class="mockup-chart-box">
@@ -367,8 +434,8 @@
                             <p>기업/공단/개별 등 수백 개의 복잡한 검진 상품도 자유롭게 생성하고 즉시 배포합니다.</p>
                         </li>
                         <li>
-                            <h3><i class="fa-solid fa-calendar-check"></i>간편한 케파(Capacity) 캘린더</h3>
-                            <p>관리자가 직접 날짜와 시간대별 예약 케파(Capa)를 설정하고 마감합니다. 예약자는 병원이 '오픈'한 슬롯에서만 예약이 가능하여, 이중 예약과 운영 오류를 원천 차단합니다.</p>
+                            <h3><i class="fa-solid fa-calendar-check"></i>간편한 용량(Capacity) 캘린더</h3>
+                            <p>관리자가 직접 날짜와 시간대별 예약 용량(Capa)을 설정하고 마감합니다. 예약자는 병원이 '오픈'한 슬롯에서만 예약이 가능하여, 이중 예약과 운영 오류를 원천 차단합니다.</p>
                         </li>
                         <li>
                             <h3><i class="fa-solid fa-file-excel"></i>간편한 엑셀(EMR) 연동</h3>
@@ -382,7 +449,7 @@
 
     <section id="patient-portal" class="feature-showcase">
         <div class="container">
-            <h2 class="slide-in-right">👤 02. 예약자 포털</h2>
+            <h2 class="slide-in-right">👤 02. 예약자 포털 (Premium CX)</h2>
             <p class="section-subtitle">고객은 전화기 앞에서 기다릴 필요가 없습니다.</p>
             <div class="feature-layout image-right">
                 <div class="feature-text slide-in-left">
@@ -411,11 +478,12 @@
                                 <div class="lorem-bar w-60"></div>
                                 <div class="lorem-bar w-80"></div>
                             </div>
-                            <div class="mockup-phone-section">
+                            <div class="mockup-phone-section" id="tap-target-section">
                                 <h4>선택검사 A (1개 선택)</h4>
                                 <div class="lorem-bar"></div>
                                 <div class="lorem-bar"></div>
                                 <div class="lorem-bar"></div>
+                                <i class="fa-solid fa-hand-pointer finger-tap-icon"></i>
                             </div>
                             <div class="mockup-phone-section">
                                 <h4>추가검사</h4>
@@ -431,17 +499,18 @@
 
     <section id="corporate-portal" class="feature-showcase alt-bg">
         <div class="container">
-            <h2 class="slide-in-left">🏢 03. 기업 포털</h2>
+            <h2 class="slide-in-left">🏢 03. 기업 포털 (B2B Cockpit)</h2>
             <p class="section-subtitle">병원의 '진짜 고객', B2B 담당자의 행정 업무까지 자동화합니다.</p>
             <div class="feature-layout image-left">
                 <div class="feature-image">
                     <div class="mockup-wrapper fade-in-up">
                         <div class="mockup-admin">
-                            <div class="mockup-admin-sidebar">
+                             <div class="mockup-admin-sidebar">
                                 <div class="logo">기업 포털</div>
                                 <div class="menu-item active">수검 현황</div>
                                 <div class="menu-item">서류 다운로드</div>
                                 <div class="menu-item">공지사항</div>
+                                <div class="menu-item">담당자 정보</div>
                             </div>
                             <div class="mockup-admin-body">
                                 <div class="mockup-admin-header">
@@ -451,27 +520,27 @@
                                     </div>
                                 </div>
                                 <div class="mockup-admin-content">
-                                    <div class="mockup-card-grid">
-                                        <div class="mockup-card">
+                                    <div class="mockup-card-grid" id="corp-mockup-cards">
+                                        <div class="mockup-card" id="corp-card-1">
                                             <div class="label">총 임직원</div>
-                                            <div class="value">500</div>
+                                            <div class="value">0</div>
                                         </div>
-                                        <div class="mockup-card">
+                                        <div class="mockup-card" id="corp-card-2">
                                             <div class="label">수검 완료</div>
-                                            <div class="value">350</div>
+                                            <div class="value">0</div>
                                         </div>
-                                        <div class="mockup-card">
+                                        <div class="mockup-card" id="corp-card-3">
                                             <div class="label">미수검</div>
-                                            <div class="value">150</div>
+                                            <div class="value">0</div>
                                         </div>
-                                        <div class="mockup-card">
+                                        <div class="mockup-card" id="corp-card-4">
                                             <div class="label">수검률</div>
-                                            <div class="value">70.0%</div>
+                                             <div><span class="value">70</span><span class="unit">.0%</span></div>
                                         </div>
                                     </div>
                                     <div class="mockup-chart-box">
                                         <div class="label">사업장 보관용 서류 다운로드</div>
-                                        <div class="lorem-bar w-60" style="margin-top: 20px;"></div> 
+                                        <div class="lorem-bar w-60" style="margin-top: 20px;"></div>
                                         <div class="lorem-bar w-60"></div>
                                     </div>
                                 </div>
@@ -499,7 +568,7 @@
     <section id="security" class="reviews-section">
         <div class="container">
             <h2 class="slide-in-left">
-                기술력, 그리고 신뢰
+                기술력, 그리고 신뢰 (The Foundation)
             </h2>
             <div class="reviews-grid">
                 <div class="review-card fade-in-up">
@@ -512,7 +581,7 @@
                 </div>
                 <div class="review-card fade-in-up delay-2">
                     <div class="icon-small"><i class="fa-solid fa-server"></i></div>
-                    <p class="quote"><strong>안정적인 클라우드 아키텍처</strong><br>최신 클라우드 네이티브 아키텍처로 구축되어 트래픽 급증에도 안정적입니다. 모든 데이터는 실시간 PITR 백업으로, 재해 시에도 안전하게 복구됩니다.</p>
+                    <p class="quote"><strong>안정적인 클라우드 아키텍처</strong><br>최신 클라우드 네이티브 아키텍처로 구축되어 트래픽 급증에도 안정적입니다. 모든 데이터는 실시간 PITR 백업로, 재해 시에도 안전하게 복구됩니다.</p>
                 </div>
                  <div class="review-card fade-in-up delay-3">
                     <div class="icon-small"><i class="fa-solid fa-rocket"></i></div>
@@ -525,19 +594,19 @@
     <footer class="footer">
         <div class="container">
             <div class="footer-info">
-                <p class="company-name">MediSwich</p>
-                <p>대표자: 박진석 | 대표번호: 1533-2405</p>
+                <p class="company-name">메디스위치 (MediSwich)</p>
+                <p>대표: 박진석 | 대표번호: 1533-2405</p>
                 <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
                 <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
             </div>
             <div class="footer-links">
                 <a href="#">이용약관</a>
                 <a href="#">개인정보처리방침</a>
-                <a href="mailto:contact@mediswich.com">contact@mediswich.com</a>
+                <a href="mailto:contact@mediswich.co.kr">contact@mediswich.co.kr</a>
             </div>
         </div>
     </footer>
-    
+
     <div id="contact-modal" class="modal">
         <div class="modal-content scale-in">
             <span class="close-button">&times;</span>
@@ -554,5 +623,70 @@
     </div>
 
     <script src="script.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const countUp = (targetElement, endValue, duration = 1500, isPercentage = false) => {
+          let startValue = 0;
+          const element = document.querySelector(targetElement);
+          if (!element) return;
+          element.textContent = startValue + (isPercentage ? '%' : ''); // 초기값
+
+          const range = endValue - startValue;
+          if (range === 0) {
+              element.textContent = endValue + (isPercentage ? (targetElement.includes('corp-card-4') ? '.0%' : '%') : '');
+              return;
+          }
+          let current = startValue;
+          const increment = endValue > startValue ? 1 : -1;
+          let stepTime = Math.abs(Math.floor(duration / range));
+          if (stepTime < 10) stepTime = 10;
+
+          const timer = setInterval(() => {
+            current += increment;
+            element.textContent = current + (isPercentage ? (targetElement.includes('corp-card-4') ? '.0%' : '%') : '');
+            if (current == endValue) {
+              clearInterval(timer);
+            }
+          }, stepTime);
+        };
+
+        const observerOptions = { threshold: 0.3 };
+
+        const observerCallback = (entries, observer) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const target = entry.target;
+              const targetId = target.id;
+
+              if (targetId === 'admin-mockup-cards') {
+                countUp('#admin-card-1 .value', 108);
+                countUp('#admin-card-2 .value', 92);
+                countUp('#admin-card-3 .value', 640);
+                countUp('#admin-card-4 .value', 85); // %는 CSS로 처리
+              } else if (targetId === 'corp-mockup-cards') {
+                countUp('#corp-card-1 .value', 500);
+                countUp('#corp-card-2 .value', 350);
+                countUp('#corp-card-3 .value', 150);
+                countUp('#corp-card-4 .value', 70); // %는 CSS로 처리
+              } else if (target.classList.contains('mockup-bar-chart')) {
+                  target.classList.add('start-bar-animation');
+              }
+              observer.unobserve(target);
+            }
+          });
+        };
+
+        const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+        const adminCards = document.getElementById('admin-mockup-cards');
+        const corpCards = document.getElementById('corp-mockup-cards');
+        const barCharts = document.querySelectorAll('.mockup-bar-chart');
+
+        if (adminCards) observer.observe(adminCards);
+        if (corpCards) observer.observe(corpCards);
+        barCharts.forEach(chart => observer.observe(chart));
+      });
+    </script>
 </body>
 </html>
