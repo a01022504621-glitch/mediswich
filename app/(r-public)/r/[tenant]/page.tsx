@@ -9,7 +9,6 @@ import type { CSSProperties } from "react";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/* 타입 */
 type NoticeItem = { title?: string; icon?: string; lines?: string[] };
 type PatientPageConfig = {
   themePreset?: "modern" | "warm" | "trust" | "classic";
@@ -33,13 +32,12 @@ const DEFAULT_CFG = {
   noticeItems: [] as NoticeItem[],
 } as const;
 
-/* 색상/공지 정규화 */
 function coerceColor(x: unknown, d: string): string {
   if (typeof x !== "string") return d;
   const s = x.trim();
   if (!s || s.length > 48) return d;
-  if (/[<>"']/g.test(s)) return d; // 간단 XSS 방지
-  return s; // hex, rgb(a), hsl(a), color name 모두 허용
+  if (/[<>"']/g.test(s)) return d;
+  return s;
 }
 function normalizeNotices(c: any): NoticeItem[] {
   const picks = [c?.noticeItems, c?.notice?.items, c?.guide?.notice?.items, c?.noticeList, c?.noticeBlocks];
@@ -85,7 +83,6 @@ function sanitize(html?: string) {
   return String(html ?? "").replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
 }
 
-/* 페이지 */
 export default async function RLanding({ params }: { params: { tenant: string } }) {
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
@@ -120,18 +117,25 @@ export default async function RLanding({ params }: { params: { tenant: string } 
 
       <div className="mx-auto w-full max-w-xl p-3 sm:p-5">
         <section className="rounded-2xl bg-white/90 backdrop-blur-md shadow-xl ring-1 ring-slate-100/70">
-          <div className="rounded-t-2xl bg-white/90 px-4 py-5 backdrop-blur-md">
-            <div className="text-center">
-              <div className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: cfg.colors.accent }}>
-                {hospital.name} 검진 예약
-              </div>
-
+          {/* 헤더 여백 축소 */}
+          <div className="rounded-t-2xl bg-white/90 px-4 py-2 backdrop-blur-md">
+            <div className="text-left">
+              {/* 라벨 제거, 로고 바로 표시 */}
               {logoUrl ? (
-                <img src={logoUrl} alt="logo" className="mx-auto mt-1" style={{ maxWidth: 200, height: "auto" }} />
+                <img
+                  src={logoUrl}
+                  alt="logo"
+                  className="block mb-1"
+                  style={{ width: "100%", height: "auto" }}
+                />
               ) : (
-                <div className="mt-1">
+                <div className="mt-0">
                   {(cfg.titleLines ?? []).map((line, i) => (
-                    <div key={i} className={i === 0 ? "text-2xl font-extrabold" : "text-base font-semibold"} style={{ color: cfg.titleColor }}>
+                    <div
+                      key={i}
+                      className={i === 0 ? "text-2xl font-extrabold" : "text-base font-semibold"}
+                      style={{ color: cfg.titleColor }}
+                    >
                       {line}
                     </div>
                   ))}
@@ -142,7 +146,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
 
           {/* 공지: themeJson 우선 */}
           {cfg.noticeItems.length > 0 ? (
-            <div className="px-4 pb-5 pt-0">
+            <div className="px-4 pb-4 pt-0">
               {cfg.noticeItems.map((n, idx) => (
                 <div key={idx} className="mb-3 rounded-xl bg-white/90 p-3 shadow-sm ring-1 ring-slate-100">
                   <div className="flex items-center gap-2">
@@ -162,7 +166,7 @@ export default async function RLanding({ params }: { params: { tenant: string } 
               ))}
             </div>
           ) : notice ? (
-            <div className="px-4 pb-5 pt-0">
+            <div className="px-4 pb-4 pt-0">
               <div className="rounded-xl bg-white/90 p-3 shadow-sm ring-1 ring-slate-100">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold" style={{ color: cfg.colors.accent }}>📢 공지</span>
@@ -181,5 +185,6 @@ export default async function RLanding({ params }: { params: { tenant: string } 
     </main>
   );
 }
+
 
 

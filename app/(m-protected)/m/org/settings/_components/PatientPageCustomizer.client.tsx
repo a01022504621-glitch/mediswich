@@ -240,7 +240,7 @@ export default function PatientPageCustomizer() {
   /* preview bg */
   const previewStyle = useMemo<React.CSSProperties>(() => {
     const bg =
-      cfg.background?.type === "gradient" && cfg.background?.color2
+      (cfg.background?.type === "gradient" && cfg.background?.color2)
         ? {
             backgroundImage: `linear-gradient(${
               cfg.background.direction === "to-r"
@@ -503,13 +503,13 @@ export default function PatientPageCustomizer() {
               <div className="h-5 bg-black/5" />
               {/* screen body */}
               <div className="min-h-full p-4" style={previewStyle}>
-                {/* 헤더: 로고/제목 */}
-                <div className="text-center mb-3">
+                {/* 헤더: 로고/제목  ─ 수정: 좌측 정렬 + 폭 제한 해제 */}
+                <div className="mb-3" style={{ textAlign: "left" }}>
                   {cfg.logoUrl ? (
                     <img
                       src={cfg.logoUrl}
                       alt="logo"
-                      style={{ maxWidth: 220, height: "auto", display: "inline-block" }}
+                      style={{ display: "block", width: "100%", height: "auto" }}
                     />
                   ) : (
                     <div style={{ color: cfg.titleColor || DEFAULT_CFG.titleColor }}>
