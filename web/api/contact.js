@@ -1,66 +1,64 @@
-// /api/contact.js
+// /web/api/contact.js
 import nodemailer from "nodemailer";
 
 export default async function handler(req, res) {
+  if (req.method === "GET") return res.status(200).json({ ok: true, hint: "POST to this endpoint" });
   if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
   try {
-    const { name, hospital, phone, email, message, page } = req.body || {};
-    if (!name || !hospital || !phone || !email)
-      return res.status(400).json({ error: "필수 항목 누락" });
+    // 1) 입력 검증
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const { name, hospital, phone, email, message, page } = body;
+    if (!name || !hospital || !phone || !email) return res.status(400).json({ error: "필수 항목 누락" });
 
-    // SMTP 설정: Vercel 환경변수에 설정
+    // 2) 환경변수 검증
+    const host = process.env.SMTP_HOST;
+    const port = Number(process.env.SMTP_PORT || 465);
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const to   = process.env.TO_EMAIL || "contact@mediswich.co.kr";
+    if (!host || !port || !user || !pass) return res.status(500).json({ error: "ENV_MISSING" });
+
+    // 3) SMTP 연결
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,          // 예: smtp.gmail.com, smtp.worksmobile.com 등
-      port: Number(process.env.SMTP_PORT),  // 예: 465 또는 587
-      secure: Number(process.env.SMTP_PORT) === 465,
-      auth: {
-        user: process.env.SMTP_USER,        // 발신 계정 ID
-        pass: process.env.SMTP_PASS         // 발신 계정 비밀번호/앱비번
-      }
+      host,
+      port,
+      secure: port === 465,            // 465=SSL, 587=STARTTLS
+      auth: { user, pass },
+      // 네이버웍스 인증서 문제 회피가 필요할 때만 아래 한 줄을 잠시 사용
+      // tls: { rejectUnauthorized: false }
     });
 
-    const to = process.env.TO_EMAIL || "contact@mediswich.co.kr";
+    // 자격 검증(여기서 많이 실패함: Invalid login, CERT 등)
+    await transporter.verify();
+
+    // 4) 메일 발송
     const subject = `웹 문의 접수: ${hospital} / ${name}`;
-    const plain = [
+    const text = [
       `이름: ${name}`,
       `병원/회사: ${hospital}`,
       `연락처: ${phone}`,
       `이메일: ${email}`,
       `페이지: ${page || ""}`,
       "",
-      `문의내용:`,
-      `${message || ""}`
+      "문의내용:",
+      (message || "")
     ].join("\n");
 
-    const html = `
-      <h2>메디스위치 웹 문의</h2>
-      <p><b>이름:</b> ${escapeHtml(name)}</p>
-      <p><b>병원/회사:</b> ${escapeHtml(hospital)}</p>
-      <p><b>연락처:</b> ${escapeHtml(phone)}</p>
-      <p><b>이메일:</b> ${escapeHtml(email)}</p>
-      <p><b>페이지:</b> ${escapeHtml(page || "")}</p>
-      <p><b>문의내용:</b><br>${escapeHtml(message || "").replace(/\n/g,"<br>")}</p>
-    `;
-
     await transporter.sendMail({
-      from: `"Mediswich Web" <${process.env.SMTP_USER || to}>`,
+      from: `"Mediswich Web" <${user}>`, // 일부 SMTP는 From=로그인계정 요구
       to,
       replyTo: email,
       subject,
-      text: plain,
-      html
+      text
     });
 
     return res.status(200).json({ ok: true });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: "서버 오류" });
+    // Vercel Functions 로그에서 확인 가능
+    console.error("MAIL_ERR", { message: e.message, code: e.code, command: e.command, response: e.response });
+    return res.status(500).json({ error: "SERVER_ERROR" });
   }
 }
 
-// 간단 XSS 방지
-function escapeHtml(s="") {
-  return s.replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
-}
 
