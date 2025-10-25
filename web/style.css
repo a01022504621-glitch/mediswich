@@ -1,7 +1,7 @@
 /* =====================================================
 CSS File: style.css (Definitive Final Version - UI/UX Refined)
 Purpose: All-in-one styles with mobile layout fixes and UX improvements.
-Date: 2025-10-23 (Final Polish v6 - Aurora Glassmorphism)
+Date: 2025-10-24 (Final Polish v12 - Mobile Clip & Animation Fix)
 ===================================================== */
 
 /* -------------------- 0. 기본 설정 및 변수 -------------------- */
@@ -19,7 +19,7 @@ Date: 2025-10-23 (Final Polish v6 - Aurora Glassmorphism)
     --color-danger: #ef4444;
     --color-success: #10b981;
 
-    /* Shadows (더 부드럽게 조정) */
+    /* Shadows */
     --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.04);
     --shadow-medium: 0 6px 15px rgba(0, 0, 0, 0.07);
     --shadow-card: 0 8px 20px rgba(0, 0, 0, 0.05);
@@ -38,7 +38,7 @@ Date: 2025-10-23 (Final Polish v6 - Aurora Glassmorphism)
     /* Transitions & Animations */
     --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Header height for calc() */
+    /* Header height */
     --header-h: 64px;
 }
 
@@ -59,7 +59,6 @@ html, body {
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-
     word-break: keep-all;
     overflow-wrap: break-word;
     text-wrap: pretty;
@@ -110,7 +109,7 @@ h3 { font-size: 1.75rem; margin-bottom: 15px; font-weight: var(--font-weight-bol
 .cta-button.full-width { width: 100%; }
 
 /* -------------------- 4. 섹션 공통 스타일 -------------------- */
-section { padding: 100px 0; transition: background-color 0.3s ease; overflow: hidden; }
+section { padding: 100px 0; transition: background-color 0.3s ease; }
 section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; position: relative; }
 
 /* -------------------- 5. 히어로 섹션 -------------------- */
@@ -123,14 +122,30 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
     text-align: center;
     border-bottom: 1px solid var(--color-border);
     position: relative;
+    overflow: hidden;
 }
 .page-hero { background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%); padding: 180px 0 80px; text-align: center; border-bottom: 1px solid var(--color-border); }
 .hero-actions { display: flex; justify-content: center; gap: 20px; margin-top: 40px; margin-bottom: 30px; }
-.trust-icons p { font-size: 0.95rem; font-weight: var(--font-weight-medium); color: var(--color-text-light); display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 20px; line-height: 1.8; }
-.trust-icons .trust-point { display: inline-flex; align-items: center; }
+
+.trust-icons ul {
+    list-style: none;
+    padding-left: 0;
+    font-size: 0.95rem;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-light);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px 20px;
+    line-height: 1.8;
+}
+.trust-icons li {
+    display: inline-flex;
+    align-items: center;
+}
 
 /* -------------------- 6. 카드 및 그리드 스타일 -------------------- */
-.value-prop { background-color: var(--color-section-bg); padding-bottom: 80px; }
+.value-prop { background-color: var(--color-section-bg); padding-bottom: 80px; overflow: hidden; }
 .value-grid-new, .value-intro-grid, .reviews-grid { display: grid; gap: 30px; }
 .value-grid-new, .value-intro-grid { grid-template-columns: repeat(3, 1fr); }
 .value-card-new { background: var(--color-background); padding: 40px 30px; border-radius: 16px; border: 1px solid var(--color-border); text-align: center; transition: all 0.3s var(--transition-smooth); box-shadow: var(--shadow-card); }
@@ -138,143 +153,11 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
 .icon-circle { width: 65px; height: 65px; background: linear-gradient(135deg, var(--color-primary), #005bb5); color: var(--color-background); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 2rem; margin: 0 auto 25px; box-shadow: 0 5px 15px rgba(0, 112, 243, 0.25); transition: transform 0.4s var(--transition-smooth); }
 .value-card-new.hover-effect:hover .icon-circle { transform: rotate(5deg) scale(1.08); }
 
-/* -------------------- 7. 서비스 비교 섹션 (Before/After) - Aurora Glassmorphism (최종) -------------------- */
-.comparison-section-new { background-color: var(--color-background); padding: 120px 0; /* 패딩 증가 */ }
-.comparison-item {
-    display: flex;
-    gap: 25px;
-    align-items: stretch;
-    position: relative;
-}
-
-.problem-card, .solution-card {
-    flex: 1;
-    border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Glass 테두리 */
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); /* Glass 그림자 */
-    padding: 40px;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.3s ease;
-}
-
-/* Aurora 배경 함수 (SCSS 변수 사용 불가하여 CSS 변수로 대체) */
-@property --gradient-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
-@keyframes aurora-rotation { 0% { --gradient-angle: 0deg; } 100% { --gradient-angle: 360deg; } }
-
-.problem-card {
-    background: rgba(230, 230, 230, 0.6); /* 회색톤 반투명 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-/* Before 오로라 (차가운 톤) */
-.problem-card::before {
-    content: "";
-    position: absolute;
-    inset: -100px; /* 크게 확장 */
-    background: conic-gradient(from var(--gradient-angle), #d1d5db, #9ca3af, #d1d5db);
-    animation: aurora-rotation 10s linear infinite;
-    z-index: -1;
-    opacity: 0.15;
-}
-
-
-.solution-card {
-    background: rgba(220, 240, 255, 0.6); /* 파랑톤 반투명 */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-/* After 오로라 (밝은 톤) */
-.solution-card::before {
-    content: "";
-    position: absolute;
-    inset: -100px;
-    background: conic-gradient(from var(--gradient-angle), var(--color-primary), var(--color-secondary), #86efac, var(--color-primary)); /* 브랜드 컬러 활용 */
-    animation: aurora-rotation 10s linear infinite;
-    z-index: -1;
-    opacity: 0.15;
-}
-
-.solution-card:hover {
-    transform: translateY(-5px) scale(1.01); /* 호버 효과 강화 */
-    box-shadow: 0 15px 40px rgba(0, 112, 243, 0.15);
-}
-
-.comparison-item .icon-header { font-size: 0.9rem; font-weight: 600; gap: 6px; align-items: center; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; } /* 스타일 변경 */
-.comparison-item .icon-header i { font-size: 1em; line-height: 1; margin-right: 2px; } /* 크기/정렬 */
-.problem-card .icon-header { color: #dc2626; } /* 더 진한 빨강 */
-.solution-card .icon-header { color: #059669; } /* 더 진한 녹색 */
-
-.comparison-item h3 {
-    font-size: 1.8rem; /* 크기 유지 */
-    margin-bottom: 15px;
-    font-weight: 700;
-}
-.problem-card h3 { color: var(--color-text-dark); }
-.solution-card h3 { color: var(--color-primary); }
-
-.comparison-item p {
-    font-size: 0.95rem;
-    line-height: 1.8;
-    color: var(--color-text-light);
-}
-.solution-card p {
-    color: var(--color-text-dark);
-    font-weight: 500;
-}
-
-/* 가운데 화살표 애니메이션 */
-@keyframes arrow-move {
-  0%, 100% { transform: translateX(-3px); }
-  50% { transform: translateX(3px); }
-}
-.comparison-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2.5rem; /* 크기 키움 */
-    color: var(--color-primary);
-    opacity: 0.5;
-    animation: arrow-move 1.5s infinite ease-in-out; /* 루핑 애니메이션 */
-}
-
-/* Before/After 모바일 반응형 (Glassmorphism 유지) */
-@media (max-width: 768px) {
-    .comparison-item {
-        flex-direction: column;
-        gap: 0;
-        position: relative;
-        padding: 30px 0;
-    }
-    .problem-card, .solution-card {
-        border-radius: 18px;
-        margin: 0;
-        padding: 35px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-     .problem-card { background-color: rgba(248, 249, 250, 0.8); }
-     .solution-card { background-color: rgba(235, 245, 255, 0.8); }
-
-    .comparison-arrow {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(90deg);
-        background-color: var(--color-background);
-        border: 1px solid var(--color-border);
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        font-size: 1.4rem;
-        box-shadow: var(--shadow-medium);
-        z-index: 5;
-        animation: none; /* 모바일에서는 제거 */
-    }
-    .solution-card:hover { transform: translateY(0); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
-}
+/* -------------------- 7. [삭제됨] 서비스 비교 섹션 (중복 코드 제거) -------------------- */
+/* 21번 섹션으로 이동 및 개편되었습니다. */
 
 /* -------------------- 8. ABOUT 페이지 스타일 -------------------- */
-.about-section { padding: 80px 0; }
+.about-section { padding: 80px 0; overflow: hidden; }
 .intro-section { background-color: var(--color-light-gray); }
 .value-intro-card { padding: 30px; border-radius: 12px; background-color: var(--color-background); box-shadow: var(--shadow-light); transition: transform 0.2s ease, box-shadow 0.2s ease; }
 .value-intro-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.07); }
@@ -291,7 +174,7 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
 /* -------------------- 10. FEATURES 페이지 스타일 (해당 파일로 이동) -------------------- */
 
 /* -------------------- 11. 기술력 및 신뢰 섹션 -------------------- */
-.reviews-section { background-color: var(--color-section-bg); padding-top: 80px; }
+.reviews-section { background-color: var(--color-section-bg); padding-top: 80px; overflow: hidden; }
 .reviews-grid { grid-template-columns: repeat(2, 1fr); gap: 30px; }
 .review-card { background-color: var(--color-background); padding: 30px; border-radius: 15px; box-shadow: var(--shadow-card); transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; flex-direction: column; align-items: flex-start; position: relative; overflow: hidden; }
 .review-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 6px; background: linear-gradient(to right, var(--color-primary), var(--color-secondary)); transition: height 0.2s ease; }
@@ -302,7 +185,7 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
 .quote { font-style: normal; color: var(--color-text-dark); margin-bottom: 0; line-height: 1.7; font-weight: var(--font-weight-medium); font-size: 1rem; }
 
 /* -------------------- 12. CONTACT 폼 섹션 -------------------- */
-.contact-page-section { background-color: var(--color-background); padding-bottom: 60px; }
+.contact-page-section { background-color: var(--color-background); padding-bottom: 60px; overflow: hidden; }
 .form-page-subtitle { text-align: center; margin-bottom: 40px; color: var(--color-text-light); }
 .contact-form-page-layout { max-width: 550px; margin: 0 auto; padding: 50px; border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-card); background-color: var(--color-light-gray); }
 .form-group { margin-bottom: 20px; }
@@ -312,7 +195,7 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
 .form-info { text-align: center; margin-top: 20px; font-size: 0.85rem; color: var(--color-text-light); }
 
 /* -------------------- 13. FAQ 섹션 -------------------- */
-.faq-section { background-color: var(--color-section-bg); }
+.faq-section { background-color: var(--color-section-bg); overflow: hidden; }
 .faq-list { max-width: 900px; margin: 0 auto; }
 .faq-item { margin-bottom: 15px; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; background-color: var(--color-background); box-shadow: var(--shadow-light); }
 .faq-question { display: block; padding: 20px 25px; cursor: pointer; font-weight: var(--font-weight-bold); color: var(--color-text-dark); list-style: none; transition: background-color 0.2s ease, color 0.2s ease; position: relative; }
@@ -324,7 +207,7 @@ details[open] > summary.faq-question { background-color: var(--color-background)
 
 
 /* -------------------- 14. 푸터 -------------------- */
-.cta-footer { padding: 120px 0; background: linear-gradient(135deg, var(--color-primary), #004d9c); text-align: center; color: white; }
+.cta-footer { padding: 120px 0; background: linear-gradient(135deg, var(--color-primary), #004d9c); text-align: center; color: white; overflow: hidden; }
 .cta-footer h2 { color: white; margin-bottom: 40px; }
 .cta-button.massive { padding: 20px 50px; font-size: 1.4rem; background-color: var(--color-secondary); color: white; border: none; box-shadow: 0 8px 30px rgba(0, 201, 167, 0.3); transition: all 0.2s ease; }
 .cta-button.massive:hover { background-color: #00b093; box-shadow: 0 10px 35px rgba(0, 201, 167, 0.4); transform: translateY(-2px); }
@@ -339,15 +222,45 @@ details[open] > summary.faq-question { background-color: var(--color-background)
 .close-button { color: #9ca3af; font-size: 30px; font-weight: normal; cursor: pointer; position: absolute; top: 15px; right: 15px; line-height: 1; transition: color 0.2s ease; z-index: 10; padding: 5px; }
 .close-button:hover { color: var(--color-text-dark); background-color: rgba(0,0,0,0.05); border-radius: 50%; }
 
-/* -------------------- 16. 애니메이션 (CSS) -------------------- */
-.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .bounce-in, .pop-in { opacity: 0; transition: opacity 0.8s var(--transition-smooth), transform 0.8s var(--transition-smooth); }
+/* -------------------- 16. 기본 애니메이션 (CSS) -------------------- */
+.fade-in-up, .slide-in-left, .slide-in-right, .scale-in, .pop-in { opacity: 0; transition: opacity 0.8s var(--transition-smooth), transform 0.8s var(--transition-smooth); }
 .fade-in-up { transform: translateY(20px); }
 .slide-in-left { transform: translateX(-30px); }
 .slide-in-right { transform: translateX(30px); }
 .scale-in { transform: scale(0.95); }
 .pop-in { transform: scale(0.7); }
+
+/* Intersection Observer로 is-visible 클래스가 추가될 때 */
 .is-visible { opacity: 1 !important; transform: translate(0, 0) scale(1) !important; }
+
+/* Delay Classes */
 .delay-1 { transition-delay: 0.1s; } .delay-2 { transition-delay: 0.15s; } .delay-3 { transition-delay: 0.2s; } .delay-4 { transition-delay: 0.25s; } .delay-5 { transition-delay: 0.3s; } .delay-6 { transition-delay: 0.35s; }
+
+/* [수정] 비교 섹션 내부 요소 애니메이션 (forwards 추가) */
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+/* 카드 보일 때 애니메이션 트리거 */
+.comparison-card.is-visible .comparison-visual .placeholder-design {
+    animation: scaleIn 0.6s var(--transition-smooth) 0.3s forwards; /* forwards 추가 */
+}
+
+/* Before 카드 내부 요소 애니메이션 (Staggered) */
+.comparison-card.is-visible .before-design .chaos-box {
+    animation: fadeInUp 0.5s var(--transition-smooth) forwards; /* forwards 추가 */
+}
+.comparison-card.is-visible .before-design .box-1 { animation-delay: 0.5s; }
+.comparison-card.is-visible .before-design .box-2 { animation-delay: 0.6s; }
+.comparison-card.is-visible .before-design .box-3 { animation-delay: 0.7s; }
+
+/* After 카드 내부 요소 애니메이션 */
+.comparison-card.is-visible .after-design .dash-sidebar,
+.comparison-card.is-visible .after-design .dash-main {
+    animation: fadeInUp 0.5s var(--transition-smooth) forwards; /* forwards 추가 */
+}
+.comparison-card.is-visible .after-design .dash-sidebar { animation-delay: 0.5s; }
+.comparison-card.is-visible .after-design .dash-main { animation-delay: 0.6s; }
+
 
 /* -------------------- 17. 모바일 최적화 (Mobile Responsive) -------------------- */
 .menu-toggle-btn { display: none; background: none; border: none; font-size: 28px; cursor: pointer; color: var(--color-text-dark); padding: 5px 10px; transition: transform 0.2s ease, color 0.2s ease; }
@@ -368,6 +281,9 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     .dropdown-content a:last-child { border-bottom: none; }
     .value-grid-new, .value-intro-grid, .reviews-grid { grid-template-columns: repeat(2, 1fr); }
     .vision-content { gap: 30px; flex-direction: column; text-align: center; }
+
+    /* [개편됨] 정적 비교 섹션 반응형 */
+    .comparison-grid { grid-template-columns: 1fr; }
 }
 
 /* 모바일 최적화 (768px 이하) */
@@ -376,12 +292,11 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     .logo { flex-grow: 1; }
     .value-grid-new, .value-intro-grid, .reviews-grid { grid-template-columns: 1fr; }
 
-    /* 모바일 가독성 향상: 폰트 크기 및 줄간격 */
     .subtitle { font-size: 1rem; line-height: 1.7; }
-    .card-lead, .comparison-item p, .vision-text p, .faq-answer p, .solution-card p, .problem-card p {
+    .card-lead, .vision-text p, .faq-answer p, .comparison-card p {
          font-size: 0.89rem;
          line-height: 1.75;
-         text-align: left; /* 카드 본문 왼쪽 정렬 명시 */
+         text-align: left;
     }
     .value-card-new { text-align: center; }
     .value-intro-card p, .quote {
@@ -391,8 +306,7 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     .value-card-new { padding: 30px 25px; }
     .card-lead-title { font-size: 1.05rem; }
 
-    /* 모바일 Hero 3가지 포인트 정렬 최종 수정 */
-    .trust-icons p {
+    .trust-icons ul {
         display: block;
         text-align: left;
         padding: 0 10%;
@@ -400,7 +314,7 @@ details[open] > summary.faq-question { background-color: var(--color-background)
         margin: 0 auto;
         font-size: 0.88rem;
     }
-    .trust-icons .trust-point {
+    .trust-icons li {
         display: flex;
         align-items: flex-start;
         margin-bottom: 10px;
@@ -409,50 +323,28 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     .trust-icons .check-icon {
         margin-right: 8px;
         flex-shrink: 0;
-        margin-top: 4px; /* 최종 미세 조정 */
+        margin-top: 4px;
         font-size: 0.9em;
         line-height: 1;
     }
 
-    /* Before/After 화살표 위치 최종 수정 */
-    .comparison-item {
-        flex-direction: column;
-        gap: 0;
-        position: relative;
-        padding-top: 25px; /* 화살표 상단 공간 */
-        padding-bottom: 25px; /* 화살표 하단 공간 */
-    }
-    .problem-card {
-        border-radius: 16px;
-        margin-bottom: 0;
-        padding: 30px;
-        border: 1px solid var(--color-border);
-    }
-    .solution-card {
-        border-radius: 16px;
-        margin-top: 0;
-        padding: 30px;
-        border: 1px solid var(--color-border);
-    }
-    .comparison-arrow {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(90deg); /* 최종 수정 */
-        background-color: var(--color-background);
-        border: 1px solid var(--color-border);
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        font-size: 1.5rem;
-        box-shadow: var(--shadow-medium);
-        z-index: 5;
-        animation: none; /* 모바일 애니메이션 제거 */
-    }
-    .comparison-item:hover .comparison-arrow { transform: translate(-50%, -50%) rotate(90deg) scale(1); opacity: 0.8;}
-    .solution-card:hover { transform: translateY(0); box-shadow: var(--shadow-medium); border-color: #e0f2fe; }
+    /* [개편됨] 정적 비교 섹션 모바일 */
+    .comparison-section-static { padding-top: 70px; }
+    .comparison-grid { gap: 40px; }
+    .comparison-card { padding: 35px 25px; } /* [수정] 모바일 패딩 조정 */
 
-    /* 모바일 CTA 푸터 버튼 가운데 정렬 */
+    .comparison-visual {
+        height: auto;
+        min-height: 220px; /* [수정] 최소 높이 약간 증가 */
+        overflow: visible; /* [수정] 내부 요소 잘림 방지 */
+        margin-top: 25px; /* [추가] 텍스트와 간격 */
+    }
+    .comparison-visual .placeholder-design {
+        padding: 15px; /* [수정] 내부 패딩 약간 축소 */
+    }
+    .before-design .chaos-box { box-shadow: 0 2px 5px rgba(0,0,0,0.05); } /* 모바일 그림자 축소 */
+
+
     .cta-footer .container {
         display: block;
         text-align: center;
@@ -477,8 +369,11 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     .cta-button.large { width: 100%; font-size: 1rem; padding: 12px 25px; }
     section { padding: 60px 0; }
     .modal-content { padding: 30px; }
-    .card-lead, .comparison-item p, .vision-text p, .faq-answer p, .solution-card p, .problem-card p { font-size: 0.88rem; }
-    .trust-icons p { padding: 0 5%; }
+    .card-lead, .vision-text p, .faq-answer p, .comparison-card p { font-size: 0.88rem; }
+    .trust-icons ul { padding: 0 5%; }
+
+    .comparison-card { padding: 25px 20px; } /* 더 작은 화면 패딩 */
+    .comparison-visual { min-height: 200px; }
 }
 /* -------------------- 18. 브랜드 아이덴티티 섹션 (삭제됨) -------------------- */
 
@@ -490,9 +385,8 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     font-size: 1em;
 }
 
-/* 체크 아이콘 간의 간격 조정 - 데스크탑 전용 */
 @media (min-width: 769px) {
-    .trust-icons p {
+    .trust-icons ul {
       gap: 5px 20px;
     }
 }
@@ -532,7 +426,6 @@ details[open] > summary.faq-question { background-color: var(--color-background)
 }
 .footer-links a:hover { color: var(--color-background); }
 
-/* Footer 모바일 반응형 수정 */
 @media (max-width: 768px) {
     .footer .container {
         flex-direction: column;
@@ -550,144 +443,154 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     }
 }
 
-/* --- 21. Before/After 섹션 - Aurora Glassmorphism (최종) --- */
-.comparison-item {
-    background: none;
-    box-shadow: none;
-    border-radius: 0;
-    gap: 25px; /* 카드 사이 간격 약간 증가 */
-    align-items: stretch;
-    position: relative;
+/* --- 21. [개편됨] 정적 비교 섹션 (박스형 디자인) --- */
+
+.comparison-section-static {
+    background-color: var(--color-background);
+    overflow: hidden; /* 내부 애니메이션 요소 잘림 방지 */
 }
 
-.problem-card, .solution-card {
-    flex: 1;
-    border-radius: 18px; /* 더 둥글게 */
-    /* Glassmorphism 배경 */
-    background-color: rgba(255, 255, 255, 0.6); /* 흰색 반투명 */
-    backdrop-filter: blur(15px); /* 배경 블러 */
-    -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.2); /* 연한 테두리 */
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); /* 부드러운 그림자 */
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 데스크탑 2열 */
+    gap: 30px;
+    align-items: stretch; /* 카드 높이 맞춤 */
+}
+
+.comparison-card {
+    border-radius: 16px;
     padding: 40px;
-    position: relative;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     transition: all 0.3s ease;
 }
 
-/* Aurora 배경 함수 (SCSS 변수 사용 불가하여 CSS 변수로 대체) */
-@property --gradient-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
-@keyframes aurora-rotation { 0% { --gradient-angle: 0deg; } 100% { --gradient-angle: 360deg; } }
-
-.problem-card {
-    background: rgba(230, 230, 230, 0.6); /* 회색톤 반투명 */
-    border-color: rgba(229, 231, 235, 0.5);
+/* Before 카드 스타일 */
+.comparison-card.before-card {
+    background-color: #f8f9fa; /* 연한 회색 배경 */
+    border: 1px solid var(--color-border);
 }
-/* Before 오로라 (차가운 톤) */
-.problem-card::before {
-    content: "";
-    position: absolute;
-    inset: -100px; /* 크게 확장 */
-    background: conic-gradient(from var(--gradient-angle), #d1d5db, #9ca3af, #d1d5db);
-    animation: aurora-rotation 10s linear infinite;
-    z-index: -1;
-    opacity: 0.15;
+
+/* After 카드 스타일 */
+.comparison-card.after-card {
+    background-color: var(--color-section-bg); /* 연한 파란색 배경 */
+    border: 1px solid #dbeafe;
+    box-shadow: 0 10px 25px rgba(0, 112, 243, 0.08); /* 파란색 그림자 */
+}
+.comparison-card.after-card:hover {
+     transform: translateY(-5px);
+     box-shadow: 0 15px 30px rgba(0, 112, 243, 0.12);
 }
 
 
-.solution-card {
-    background: rgba(220, 240, 255, 0.6); /* 파랑톤 반투명 */
-    border: 1px solid rgba(0, 112, 243, 0.2);
+.comparison-card .icon-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex; /* 아이콘과 텍스트 정렬 */
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
-/* After 오로라 (밝은 톤) */
-.solution-card::before {
-    content: "";
-    position: absolute;
-    inset: -100px;
-    background: conic-gradient(from var(--gradient-angle), var(--color-primary), var(--color-secondary), #86efac, var(--color-primary)); /* 브랜드 컬러 활용 */
-    animation: aurora-rotation 10s linear infinite;
-    z-index: -1;
-    opacity: 0.15;
-}
+.comparison-card .icon-header i { font-size: 1.1em; line-height: 1; }
+.before-card .icon-header { color: var(--color-danger); }
+.after-card .icon-header { color: var(--color-success); }
 
-.solution-card:hover {
-    transform: translateY(-5px) scale(1.01); /* 호버 효과 강화 */
-    box-shadow: 0 15px 40px rgba(0, 112, 243, 0.15);
-}
 
-.comparison-item .icon-header { font-size: 0.9rem; font-weight: 600; gap: 6px; align-items: center; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; }
-.comparison-item .icon-header i { font-size: 1em; line-height: 1; margin-right: 2px; } /* 아이콘 크기 통일 */
-.problem-card .icon-header { color: #dc2626; }
-.solution-card .icon-header { color: #059669; }
-
-.comparison-item h3 {
+.comparison-card h3 {
     font-size: 1.8rem;
     margin-bottom: 15px;
     font-weight: 700;
 }
-.problem-card h3 { color: var(--color-text-dark); }
-.solution-card h3 { color: var(--color-primary); }
+.before-card h3 { color: var(--color-text-dark); }
+.after-card h3 { color: var(--color-primary); }
 
-.comparison-item p {
+
+.comparison-card p {
     font-size: 0.95rem;
     line-height: 1.8;
     color: var(--color-text-light);
+    margin-bottom: 30px; /* 텍스트와 비주얼 영역 간격 */
+    flex-grow: 1; /* 텍스트 길이가 달라도 비주얼 영역 위치 맞춤 */
 }
-.solution-card p {
-    color: var(--color-text-dark);
-    font-weight: 500;
+.after-card p { color: var(--color-text-dark); }
+
+/* 시각 자료 영역 */
+.comparison-visual {
+    /* height: 300px; <- 고정 높이 제거 */
+    min-height: 300px; /* 최소 높이 설정 (데스크탑) */
+    aspect-ratio: 4 / 3; /* 비율 유지 */
+    border-radius: 10px;
+    overflow: hidden; /* [수정] placeholder-design에서 overflow 처리하므로 여기선 hidden */
+    position: relative;
+    background-color: var(--color-background); /* 내부 디자인 배경과 대비 */
+    border: 1px solid var(--color-border);
 }
 
-/* 가운데 화살표 애니메이션 */
-@keyframes arrow-move {
-  0%, 100% { transform: translateX(-4px); }
-  50% { transform: translateX(4px); }
-}
-.comparison-arrow {
+/* CSS Placeholder 디자인 (공통) */
+.comparison-visual .placeholder-design {
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+    overflow: hidden; /* [수정] 자식 요소가 넘치면 잘라냄 */
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.5rem;
-    color: var(--color-primary);
-    opacity: 0.5; /* 기본 투명도 */
-    animation: arrow-move 1.8s infinite ease-in-out; /* 애니메이션 시간 조정 */
-    transition: opacity 0.3s ease;
+    opacity: 0; /* 애니메이션 시작 상태 */
 }
-.comparison-item:hover .comparison-arrow { opacity: 0.9; } /* 호버 시 투명도 증가 */
-
-/* Before/After 모바일 반응형 (Glassmorphism 유지) */
-@media (max-width: 768px) {
-    .comparison-item {
-        flex-direction: column;
-        gap: 0;
-        position: relative;
-        padding: 30px 0; /* 화살표 공간 */
-    }
-    .problem-card, .solution-card {
-        border-radius: 18px;
-        margin: 0;
-        padding: 35px;
-        border: 1px solid rgba(255, 255, 255, 0.3); /* 모바일 테두리 강화 */
-        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.08); /* 모바일 그림자 조정 */
-    }
-     .problem-card { background-color: rgba(248, 249, 250, 0.85); } /* 투명도 조정 */
-     .solution-card { background-color: rgba(235, 245, 255, 0.85); } /* 투명도 조정 */
-
-    .comparison-arrow {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(90deg); /* 최종 수정 */
-        background-color: var(--color-background);
-        border: 1px solid var(--color-border);
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        font-size: 1.4rem;
-        box-shadow: var(--shadow-medium);
-        z-index: 5;
-        animation: none; /* 모바일에서는 제거 */
-    }
-    .comparison-item:hover .comparison-arrow { transform: translate(-50%, -50%) rotate(90deg) scale(1); opacity: 1;} /* 모바일 호버 조정 */
-    .solution-card:hover { transform: translateY(0); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
+.comparison-card.is-visible .comparison-visual .placeholder-design {
+    opacity: 1; /* 카드가 보이면 내부 디자인도 보이게 */
 }
+
+
+/* Before 카오스 디자인 (조정) */
+.before-card .placeholder-design.before-design {
+    background-color: #f3f4f6;
+    border: none;
+}
+.before-design .chaos-box {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+    border-radius: 6px;
+    color: var(--color-text-light);
+    opacity: 0; /* 애니메이션 시작 상태 */
+    transform: translateY(10px); /* 애니메이션 시작 상태 */
+}
+.before-design .box-header { padding: 6px 10px; background: #e5e7eb; border-bottom: 1px solid #d1d5db; font-size: 0.75rem; font-weight: 600; color: var(--color-text-dark); }
+.before-design .box-header i { margin-right: 4px; }
+.before-design .box-content { padding: 10px; font-size: 0.8rem; opacity: 0.6; }
+
+.before-design .box-1 { width: 55%; height: 45%; top: 15%; left: 8%; transform: rotate(-8deg); z-index: 1; }
+.before-design .box-2 { width: 50%; height: 40%; top: 30%; left: 45%; transform: rotate(10deg); z-index: 2; background-color: #fef2f2; border-color: #fca5a5; }
+.before-design .box-2 .box-header { background: #fee2e2; border-color: #fca5a5; }
+.before-design .box-3 { width: 45%; height: 35%; top: 55%; left: 20%; transform: rotate(-3deg); z-index: 3; }
+
+
+/* After 대시보드 디자인 (조정) */
+.after-card .placeholder-design.after-design {
+    background-color: var(--color-background);
+    border: none;
+    gap: 15px;
+    padding: 15px;
+    align-items: stretch;
+}
+.after-design .dash-sidebar, .after-design .dash-main {
+    opacity: 0; /* 애니메이션 시작 상태 */
+    transform: translateY(10px); /* 애니메이션 시작 상태 */
+}
+.after-design .dash-sidebar { flex: 0 0 120px; background: #fff; border-radius: 6px; padding: 12px; border: 1px solid #dbeafe; }
+.after-design .dash-logo { width: 70%; height: 15px; background: var(--color-primary); opacity: 0.8; border-radius: 4px; margin-bottom: 20px; color: white; font-size: 0.6rem; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: 0.5px; }
+.after-design .dash-menu { height: 10px; background: #e0f2fe; border-radius: 3px; margin-bottom: 10px; width: 100%; }
+.after-design .dash-menu.w-60 { width: 60%; }
+
+.after-design .dash-main { flex: 1; background: #fff; border-radius: 6px; padding: 15px; border: 1px solid #dbeafe; }
+.after-design .dash-header { height: 20px; background: #e0f2fe; border-radius: 4px; width: 35%; margin-bottom: 20px; }
+.after-design .dash-content-box { height: 70px; background: #f8faff; border: 1px dashed #dbeafe; border-radius: 6px; margin-bottom: 12px; }
+.after-design .dash-content-box.small { height: 45px; display: inline-block; width: calc(50% - 6px); }
+.after-design .dash-content-box.small:first-of-type { margin-right: 12px; }
+
+/* --- 21-END. 정적 비교 섹션 --- */

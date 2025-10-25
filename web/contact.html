@@ -1,122 +1,178 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메디스위치 | 병원 검진 예약 & 운영 플랫폼</title>
-    <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>메디스위치 | 도입 문의</title>
+  <meta name="description" content="메디스위치 도입 상담 신청. 병원 상황을 진단하고 최적의 자동화 솔루션을 제안합니다.">
+  <link rel="canonical" href="https://www.mediswich.co.kr/contact">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="메디스위치">
+  <meta property="og:url" content="https://www.mediswich.co.kr/contact">
+  <meta property="og:title" content="메디스위치 | 도입 문의">
+  <meta property="og:description" content="전문가 상담 신청. 병원 맞춤 자동화 솔루션을 안내합니다.">
+
+  <!-- FAQ Structured Data -->
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+    {"@type":"Question","name":"기존 병원 EMR/HIS와 데이터 연동은 어떻게 하나요?","acceptedAnswer":{"@type":"Answer","text":"API 충돌 없이 병원 전산 양식에 맞춘 '환자 등록용 엑셀' 출력을 지원합니다. 신규 예약자 데이터를 즉시 다운로드해 오류와 시간을 줄입니다."}},
+    {"@type":"Question","name":"도입 절차와 기간은 얼마나 걸리나요?","acceptedAnswer":{"@type":"Answer","text":"계정 생성 즉시 사용 가능합니다. SaaS 방식으로 평균 1~2일 내 설정이 완료됩니다."}},
+    {"@type":"Question","name":"보안은 안전한가요? 데이터는 어디에 저장되나요?","acceptedAnswer":{"@type":"Answer","text":"금융권 수준 보안을 적용합니다. 모든 데이터는 암호화 저장되며 실시간 이중 백업(PITR)으로 보호됩니다."}},
+    {"@type":"Question","name":"사용법이 어렵지 않나요? 별도 교육이 필요한가요?","acceptedAnswer":{"@type":"Answer","text":"코딩 지식 없이 클릭만으로 설정 가능하도록 설계했습니다. 매뉴얼과 원격 지원을 제공합니다."}},
+    {"@type":"Question","name":"병원 규모가 커지거나 트래픽이 몰려도 안정적인가요?","acceptedAnswer":{"@type":"Answer","text":"클라우드 네이티브 아키텍처로 확장성이 뛰어나고 대규모 트래픽도 안정적으로 처리합니다."}}
+  ]}
+  </script>
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <header class="header">
-        <div class="container">
-            <a href="/index" class="logo">MediSwich</a>
-            <div class="header-right">
-                <nav class="nav">
-                    <a href="/index" class="nav-item">홈</a>
-                    <a href="/why-mediswich" class="nav-item">왜 메디스위치인가?</a>
-                    <div class="dropdown">
-                        <a href="/features" class="nav-item">핵심 기능</a>
-                        <div class="dropdown-content">
-                            <a href="/features#admin-portal">관리자 포털</a>
-                            <a href="/features#patient-portal">예약자 셀프서비스</a>
-                            <a href="/features#corporate-portal">기업 포털</a>
-                            <a href="/features#security">보안 및 기술</a>
-                        </div>
-                    </div>
-                    <a href="/contact" class="nav-item active">고객문의</a>
-                </nav>
-                <button id="open-contact-modal-contact" class="cta-button primary">도입 문의하기</button>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo" aria-label="메디스위치 홈">MediSwich</a>
+      <div class="header-right">
+        <nav class="nav">
+          <a href="/" class="nav-item">홈</a>
+          <a href="/why-mediswich" class="nav-item">왜 메디스위치인가?</a>
+          <div class="dropdown">
+            <a href="/features" class="nav-item">핵심 기능</a>
+            <div class="dropdown-content">
+              <a href="/features#admin-portal">관리자 포털</a>
+              <a href="/features#patient-portal">예약자 셀프서비스</a>
+              <a href="/features#corporate-portal">기업 포털</a>
+              <a href="/features#security">보안 및 기술</a>
             </div>
-        </div>
-    </header>
-
-    <section class="page-hero">
-        <div class="container">
-            <h1 class="fade-in-up">운영 혁신, 상담에서 시작됩니다.</h1>
-            <p class="subtitle fade-in-up delay-1">메디스위치 전문가가 병원의 현재 상황을 진단하고, <br> 가장 최적화된 자동화 솔루션을 제안해 드립니다.</p>
-        </div>
-    </section>
-
-    <section id="contact-form-section" class="contact-page-section">
-        <div class="container">
-            <h2 class="slide-in-left">도입 문의</h2>
-            <p class="form-page-subtitle">아래 정보를 남겨주시면, 영업일 기준 1일 이내에 담당 전문가가 연락드리겠습니다.</p>
-            
-            <form id="contact-form-page" class="contact-form-page-layout fade-in-up delay-1">
-                <div class="form-group"><label for="page-name">이름</label><input type="text" id="page-name" name="name" required></div>
-                <div class="form-group"><label for="page-hospital">병원명/회사명</label><input type="text" id="page-hospital" name="hospital" required></div>
-                <div class="form-group"><label for="page-phone">연락처</label><input type="tel" id="page-phone" name="phone" required></div>
-                <div class="form-group"><label for="page-email">이메일</label><input type="email" id="page-email" name="email" required></div>
-                <div class="form-group"><label for="page-message">주요 문의 내용</label><textarea id="page-message" name="message" rows="6" placeholder="예: 기업 검진 패키지 구성, 엑셀 연동 방식, 도입 비용 등" required></textarea></div>
-                <button type="submit" class="cta-button primary large full-width">전문가 상담 신청하기</button>
-                <p class="form-info">문의 내용은 솔루션 제안을 위해서만 사용됩니다.</p>
-            </form>
-        </div>
-    </section>
-
-    <section id="faq" class="faq-section">
-        <div class="container">
-            <h2 class="slide-in-right">자주 묻는 질문 (FAQ)</h2>
-            <div class="faq-list fade-in-up delay-1">
-                <details class="faq-item">
-                    <summary class="faq-question">Q. 기존 병원 EMR/HIS와 데이터 연동은 어떻게 하나요?</summary>
-                    <div class="faq-answer"><p>A. 메디스위치는 안정성과 호환성을 최우선으로 합니다. API 방식처럼 기존 EMR과 충돌할 위험 없이, 병원의 전산 양식에 100% 맞춘 '환자 등록용 엑셀' 출력을 지원합니다. 신규 예약자 데이터를 즉시 다운로드하여 수기 입력 오류와 시간을 획기적으로 줄일 수 있습니다.</p></div>
-                </details>
-                <details class="faq-item">
-                    <summary class="faq-question">Q. 도입 절차와 기간은 얼마나 걸리나요?</summary>
-                    <div class="faq-answer"><p>A. 계정 생성 즉시 바로 사용 가능합니다. SaaS 방식이므로 별도 설치나 병원에서 전달해주실 자료 없이, 직관적인 관리자 페이지에서 직접 모든 설정을 간편하게 완료하실 수 있습니다. (평균 1~2일 소요)</p></div>
-                </details>
-                 <details class="faq-item">
-                    <summary class="faq-question">Q. 보안은 안전한가요? 데이터는 어디에 저장되나요?</summary>
-                    <div class="faq-answer"><p>A. 메디스위치는 금융권 수준의 보안을 적용합니다. 모든 데이터는 암호화되어 저장되며, 실시간 이중 백업(PITR)으로 안전하게 보호되므로 안심하고 사용하셔도 됩니다.</p></div>
-                </details>
-                <details class="faq-item">
-                    <summary class="faq-question">Q. 사용법이 어렵지 않나요? 별도 교육이 필요한가요?</summary>
-                    <div class="faq-answer"><p>A. 네, 매우 쉽습니다. 모든 기능은 코딩 지식 없이 마우스 클릭만으로 설정 가능하도록 직관적으로 설계되었습니다. 상세 매뉴얼과 원격 지원을 통해 누구나 즉시 운영 가능합니다.</p></div>
-                </details>
-                <details class="faq-item">
-                    <summary class="faq-question">Q. 병원 규모가 커지거나 트래픽이 몰려도 안정적인가요?</summary>
-                    <div class="faq-answer"><p>A. 물론입니다. 메디스위치는 최신 클라우드 네이티브 아키텍처로 구축되어 병원의 성장에 따라 유연하게 확장 가능하며, 어떤 규모의 트래픽도 안정적으로 처리합니다.</p></div>
-                </details>
-            </div>
-        </div>
-    </section>
-
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-info">
-                <p class="company-name">메디스위치 (MediSwich)</p>
-                <p>대표자: 박진석 | 대표번호: 1533-2405</p>
-                <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
-                <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
-            </div>
-            <div class="footer-links">
-                <a href="#">이용약관</a>
-                <a href="#">개인정보처리방침</a>
-                <a href="mailto:contact@mediswich.com">contact@mediswich.co.kr</a>
-            </div>
-        </div>
-    </footer>
-    
-    <div id="contact-modal" class="modal">
-        <div class="modal-content scale-in">
-            <span class="close-button">&times;</span>
-            <h3>도입 문의</h3>
-            <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
-            <form id="contact-form-modal">
-                <div class="form-group"><label for="modal-name-contact">이름</label><input type="text" id="modal-name-contact" name="name" required></div>
-                <div class="form-group"><label for="modal-hospital-contact">병원명/회사명</label><input type="text" id="modal-hospital-contact" name="hospital" required></div>
-                <div class="form-group"><label for="modal-phone-contact">연락처</label><input type="tel" id="modal-phone-contact" name="phone" required></div>
-                <div class="form-group"><label for="modal-email-contact">이메일</label><input type="email" id="modal-email-contact" name="email" required></div>
-                <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
-            </form>
-        </div>
+          </div>
+          <a href="/contact" class="nav-item active">고객문의</a>
+        </nav>
+        <button id="open-contact-modal-contact" class="cta-button primary">도입 문의하기</button>
+      </div>
     </div>
-    
-    <script src="script.js"></script>
+  </header>
+
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="fade-in-up">운영 혁신, 상담에서 시작됩니다.</h1>
+      <p class="subtitle fade-in-up delay-1">메디스위치 전문가가 병원의 현재 상황을 진단하고, <br> 가장 최적화된 자동화 솔루션을 제안해 드립니다.</p>
+    </div>
+  </section>
+
+  <section id="contact-form-section" class="contact-page-section">
+    <div class="container">
+      <h2 class="slide-in-left">도입 문의</h2>
+      <p class="form-page-subtitle">아래 정보를 남겨주시면, 영업일 기준 1일 이내에 담당 전문가가 연락드리겠습니다.</p>
+
+      <form id="contact-form-page" class="contact-form-page-layout fade-in-up delay-1">
+        <div class="form-group"><label for="page-name">이름</label><input type="text" id="page-name" name="name" required></div>
+        <div class="form-group"><label for="page-hospital">병원명/회사명</label><input type="text" id="page-hospital" name="hospital" required></div>
+        <div class="form-group"><label for="page-phone">연락처</label><input type="tel" id="page-phone" name="phone" required></div>
+        <div class="form-group"><label for="page-email">이메일</label><input type="email" id="page-email" name="email" required></div>
+        <div class="form-group"><label for="page-message">주요 문의 내용</label><textarea id="page-message" name="message" rows="6" placeholder="예: 기업 검진 패키지 구성, 엑셀 연동 방식, 도입 비용 등" required></textarea></div>
+        <button type="submit" class="cta-button primary large full-width">전문가 상담 신청하기</button>
+        <p class="form-info">문의 내용은 솔루션 제안을 위해서만 사용됩니다.</p>
+      </form>
+    </div>
+  </section>
+
+  <section id="faq" class="faq-section">
+    <div class="container">
+      <h2 class="slide-in-right">자주 묻는 질문 (FAQ)</h2>
+      <div class="faq-list fade-in-up delay-1">
+        <details class="faq-item">
+          <summary class="faq-question">Q. 기존 병원 EMR/HIS와 데이터 연동은 어떻게 하나요?</summary>
+          <div class="faq-answer"><p>A. 메디스위치는 안정성과 호환성을 최우선으로 합니다. API 방식처럼 기존 EMR과 충돌할 위험 없이, 병원의 전산 양식에 100% 맞춘 '환자 등록용 엑셀' 출력을 지원합니다. 신규 예약자 데이터를 즉시 다운로드하여 수기 입력 오류와 시간을 획기적으로 줄일 수 있습니다.</p></div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Q. 도입 절차와 기간은 얼마나 걸리나요?</summary>
+          <div class="faq-answer"><p>A. 계정 생성 즉시 바로 사용 가능합니다. SaaS 방식이므로 별도 설치나 병원에서 전달해주실 자료 없이, 직관적인 관리자 페이지에서 직접 모든 설정을 간편하게 완료하실 수 있습니다. (평균 1~2일 소요)</p></div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Q. 보안은 안전한가요? 데이터는 어디에 저장되나요?</summary>
+          <div class="faq-answer"><p>A. 메디스위치는 금융권 수준의 보안을 적용합니다. 모든 데이터는 암호화되어 저장되며, 실시간 이중 백업(PITR)으로 안전하게 보호되므로 안심하고 사용하셔도 됩니다.</p></div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Q. 사용법이 어렵지 않나요? 별도 교육이 필요한가요?</summary>
+          <div class="faq-answer"><p>A. 네, 매우 쉽습니다. 모든 기능은 코딩 지식 없이 마우스 클릭만으로 설정 가능하도록 직관적으로 설계되었습니다. 상세 매뉴얼과 원격 지원을 통해 누구나 즉시 운영 가능합니다.</p></div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Q. 병원 규모가 커지거나 트래픽이 몰려도 안정적인가요?</summary>
+          <div class="faq-answer"><p>A. 물론입니다. 메디스위치는 최신 클라우드 네이티브 아키텍처로 구축되어 병원의 성장에 따라 유연하게 확장 가능하며, 어떤 규모의 트래픽도 안정적으로 처리합니다.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-info">
+        <p class="company-name">메디스위치 (MediSwich)</p>
+        <p>대표자: 박진석 | 대표번호: 1533-2405</p>
+        <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
+        <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#">이용약관</a>
+        <a href="#">개인정보처리방침</a>
+        <a href="mailto:contact@mediswich.co.kr">contact@mediswich.co.kr</a>
+      </div>
+    </div>
+  </footer>
+
+  <div id="contact-modal" class="modal">
+    <div class="modal-content scale-in">
+      <span class="close-button">&times;</span>
+      <h3>도입 문의</h3>
+      <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
+      <form id="contact-form-modal">
+        <div class="form-group"><label for="modal-name-contact">이름</label><input type="text" id="modal-name-contact" name="name" required></div>
+        <div class="form-group"><label for="modal-hospital-contact">병원명/회사명</label><input type="text" id="modal-hospital-contact" name="hospital" required></div>
+        <div class="form-group"><label for="modal-phone-contact">연락처</label><input type="tel" id="modal-phone-contact" name="phone" required></div>
+        <div class="form-group"><label for="modal-email-contact">이메일</label><input type="email" id="modal-email-contact" name="email" required></div>
+        <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <!-- Submit to /api/contact -->
+  <script>
+  (function(){
+    function wire(formId){
+      var f=document.getElementById(formId); if(!f) return;
+      f.addEventListener('submit', async function(e){
+        e.preventDefault();
+        var fd=new FormData(f);
+        var btn=f.querySelector('button[type="submit"]'); var t=btn&&btn.textContent;
+        if(btn){ btn.disabled=true; btn.textContent='전송 중…'; }
+        var payload={
+          name:fd.get('name'),
+          hospital:fd.get('hospital'),
+          phone:fd.get('phone'),
+          email:fd.get('email'),
+          message:fd.get('message')||'',
+          page:location.href
+        };
+        try{
+          var res=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+          var data=await res.json().catch(()=>({}));
+          if(!res.ok) throw new Error(data.error||'전송 실패');
+          f.reset(); alert('접수 완료되었습니다. 곧 연락드리겠습니다.');
+        }catch(err){
+          alert('전송 오류: '+err.message);
+        }finally{
+          if(btn){ btn.disabled=false; btn.textContent=t; }
+        }
+      });
+    }
+    wire('contact-form-page');
+    wire('contact-form-modal');
+  })();
+  </script>
 </body>
 </html>
+

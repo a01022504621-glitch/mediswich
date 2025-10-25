@@ -1,693 +1,422 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메디스위치 | 병원 검진 예약 & 운영 플랫폼</title>
-    <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>메디스위치 | 병원 검진 예약 & 운영 플랫폼</title>
+  <meta name="description" content="관리자 포털, 예약자 셀프서비스, 기업 포털, 보안·기술까지 한 번에. 메디스위치 핵심 기능을 확인하세요.">
+  <link rel="canonical" href="https://www.mediswich.co.kr/features">
 
-    <style>
-        .section-subtitle {
-            font-size: 1.2rem;
-            color: var(--color-text-light);
-            text-align: center;
-            margin-top: -40px;
-            margin-bottom: 60px;
-        }
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="메디스위치">
+  <meta property="og:url" content="https://www.mediswich.co.kr/features">
+  <meta property="og:title" content="메디스위치 | 핵심 기능">
+  <meta property="og:description" content="관리자 포털·예약자 포털·기업 포털·보안/기술. 메디스위치 핵심 기능 소개.">
 
-        .feature-showcase {
-            padding: 100px 0;
-        }
-        .feature-showcase.alt-bg {
-            background-color: var(--color-light-gray);
-        }
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebPage",
+    "name":"메디스위치 핵심 기능",
+    "url":"https://www.mediswich.co.kr/features",
+    "publisher":{
+      "@type":"Organization",
+      "name":"메디스위치",
+      "alternateName":["MediSwich","MediSwitch"]
+    }
+  }
+  </script>
 
-        .feature-layout {
-            display: flex;
-            align-items: center;
-            gap: 50px;
-        }
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="style.css">
 
-        .feature-layout.image-right {
-            flex-direction: row-reverse;
-        }
-
-        .feature-image {
-            flex: 1;
-            min-width: 0; /* Prevent image from overflowing */
-        }
-
-        .feature-text {
-            flex: 1;
-        }
-
-        .feature-text ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .feature-text li {
-            margin-bottom: 30px;
-        }
-
-        .feature-text h3 {
-            font-size: 1.5rem;
-            color: var(--color-primary);
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .feature-text h3 i {
-            font-size: 1.2rem;
-            color: var(--color-secondary);
-        }
-
-        .feature-text p {
-            font-size: 1.05rem;
-            line-height: 1.7;
-            color: var(--color-text-light);
-        }
-
-        /* --- 목업(Mockup) 스타일 --- */
-        .mockup-wrapper {
-            width: 100%;
-            border-radius: 12px;
-            background: #fff;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
-            border: 1px solid var(--color-border);
-            overflow: hidden;
-            font-family: 'Pretendard', sans-serif;
-        }
-
-        /* [수정] 관리자/기업 포털 목업 */
-        .mockup-admin {
-            display: flex;
-            background: #F9FAFB;
-        }
-        .mockup-admin-sidebar {
-            width: 160px; /* 너비 추가 축소 */
-            background: linear-gradient(180deg, #0070f3 0%, #005bb5 100%);
-            padding: 20px 15px;
-            color: rgba(255, 255, 255, 0.8);
-            flex-shrink: 0;
-        }
-        .mockup-admin-sidebar .logo {
-            font-weight: 700;
-            font-size: 1.1rem; /* 약간 축소 */
-            margin-bottom: 25px; /* 간격 조정 */
-            color: #fff;
-            word-break: break-all;
-        }
-        .mockup-admin-sidebar .menu-item {
-            padding: 8px 10px; /* 패딩 약간 축소 */
-            border-radius: 6px;
-            font-size: 0.85rem; /* 약간 축소 */
-            margin-bottom: 5px;
-            cursor: default;
-            transition: background-color 0.2s ease;
-            white-space: nowrap; /* 줄바꿈 방지 */
-            overflow: hidden;
-            text-overflow: ellipsis; /* 넘치면 ... */
-        }
-         .mockup-admin-sidebar .menu-item:not(.active):hover {
-             background-color: rgba(255, 255, 255, 0.1);
-         }
-        .mockup-admin-sidebar .menu-item.active {
-            background-color: rgba(255, 255, 255, 0.2);
-            font-weight: 600;
-            color: #fff;
-        }
-        .mockup-admin-body {
-            flex: 1;
-            min-width: 0;
-        }
-        .mockup-admin-header {
-            background: #fff;
-            padding: 12px 20px;
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .mockup-admin-header .title {
-            font-size: 1.1rem;
-            font-weight: 700;
-        }
-        .mockup-admin-header .icons {
-            display: flex;
-            gap: 15px;
-            color: #9CA3AF;
-        }
-        .mockup-admin-content {
-            padding: 20px; /* 패딩 약간 축소 */
-        }
-        .mockup-card-grid {
-            display: grid;
-            /* [수정] 반응형 그리드 */
-            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            gap: 12px; /* 간격 약간 축소 */
-            margin-bottom: 20px; /* 간격 조정 */
-        }
-        .mockup-card {
-            background: #fff;
-            padding: 12px; /* 패딩 약간 축소 */
-            border-radius: 8px;
-            border: 1px solid var(--color-border);
-            text-align: center; /* 카드 내용 중앙 정렬 */
-        }
-        .mockup-card .label {
-            font-size: 0.8rem; /* 크기 축소 */
-            color: var(--color-text-light);
-            margin-bottom: 6px; /* 간격 조정 */
-            white-space: nowrap; /* 줄바꿈 방지 */
-        }
-        .mockup-card .value {
-            font-size: 1.5rem; /* 크기 유지 또는 약간 축소 */
-            font-weight: 700; /* Bold 강조 */
-            color: var(--color-text-dark);
-            min-height: 28px;
-            line-height: 1.2; /* 숫자 높이 조정 */
-        }
-        .mockup-card .unit {
-            font-size: 0.9rem; /* 크기 조정 */
-            font-weight: 500; /* 보통 두께 */
-            color: var(--color-text-light);
-            margin-left: 2px;
-        }
-        .mockup-chart-box {
-            background: #fff;
-            padding: 15px; /* 패딩 조정 */
-            border-radius: 8px;
-            border: 1px solid var(--color-border);
-            height: 160px; /* 높이 약간 축소 */
-        }
-        .mockup-bar-chart {
-            display: flex;
-            justify-content: space-around;
-            align-items: flex-end;
-            height: 100px; /* 차트 높이 조정 */
-            padding-top: 10px;
-        }
-        .mockup-bar {
-            width: 10%;
-            background-color: var(--color-primary);
-            border-radius: 4px 4px 0 0;
-            opacity: 0.6;
-        }
-
-        /* 2. 모바일(예약자) 포털 목업 */
-        .mockup-phone {
-            max-width: 320px;
-            height: 650px;
-            margin: 0 auto;
-            background: #F9FAFB;
-            border: 8px solid #374151;
-            border-radius: 32px;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
-            padding: 15px;
-            overflow-y: auto;
-            position: relative;
-        }
-        .mockup-phone::-webkit-scrollbar { display: none; }
-        .mockup-phone { -ms-overflow-style: none; scrollbar-width: none; }
-
-        .mockup-phone-header {
-            font-size: 1.1rem;
-            font-weight: 700;
-            text-align: center;
-            padding: 10px 0;
-            border-bottom: 2px solid var(--color-border);
-            margin-bottom: 15px;
-        }
-        .mockup-phone-section {
-            background: #fff;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border: 1px solid var(--color-border);
-        }
-        .mockup-phone-section h4 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-        .lorem-bar {
-            background-color: #E5E7EB;
-            border-radius: 4px;
-            height: 16px;
-            margin-bottom: 10px;
-        }
-        .lorem-bar.w-60 { width: 60%; }
-        .lorem-bar.w-80 { width: 80%; }
-
-        .mockup-disclaimer {
-            text-align: center;
-            font-size: 0.9rem;
-            color: var(--color-text-light);
-            margin-top: 20px;
-        }
-
-        /* --- 애니메이션 스타일 --- */
-        /* 1. 막대그래프 성장 */
-        @keyframes growBar {
-          from { transform: scaleY(0); }
-          to { transform: scaleY(1); }
-        }
-        .start-bar-animation .mockup-bar {
-            transform-origin: bottom;
-            animation: growBar 1s var(--transition-smooth) forwards;
-            transform: scaleY(0);
-        }
-        .start-bar-animation .mockup-bar:nth-child(1) { animation-delay: 0.1s; }
-        .start-bar-animation .mockup-bar:nth-child(2) { animation-delay: 0.2s; }
-        .start-bar-animation .mockup-bar:nth-child(3) { animation-delay: 0.3s; }
-        .start-bar-animation .mockup-bar:nth-child(4) { animation-delay: 0.4s; }
-        .start-bar-animation .mockup-bar:nth-child(5) { animation-delay: 0.5s; }
-        .start-bar-animation .mockup-bar:nth-child(6) { animation-delay: 0.6s; }
-        .start-bar-animation .mockup-bar:nth-child(7) { animation-delay: 0.7s; }
-
-        /* 2. 손가락 탭 */
-        #tap-target-section {
-            position: relative;
-        }
-        @keyframes tapFinger {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0; }
-          10%, 90% { transform: translateY(-10px) scale(1); opacity: 1; }
-          50% { transform: translateY(-5px) scale(0.95); opacity: 1; }
-        }
-        .finger-tap-icon {
-            position: absolute;
-            bottom: 50px;
-            right: 30px;
-            font-size: 1.8rem;
-            color: var(--color-primary);
-            opacity: 0;
-            animation: tapFinger 2.5s ease-in-out infinite;
-            animation-delay: 1.5s;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-
-        /* 모바일 반응형 */
-        @media (max-width: 900px) {
-            .feature-layout {
-                flex-direction: column !important;
-            }
-            .feature-text {
-                text-align: center;
-            }
-            .feature-text h3 {
-                justify-content: center;
-            }
-            .mockup-admin-sidebar {
-                 display: none;
-            }
-            .mockup-admin-content {
-                padding: 15px;
-            }
-            .mockup-card-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-            .mockup-card .value {
-                font-size: 1.3rem;
-                min-height: 24px;
-            }
-             .mockup-card .label { font-size: 0.8rem; }
-            .mockup-card .unit { font-size: 0.8rem; }
-            .finger-tap-icon { font-size: 1.5rem; bottom: 40px; right: 20px; }
-        }
-        /* 데스크탑에서 카드 찌그러짐 방지 (추가) */
-        @media (max-width: 1100px) {
-             .mockup-card-grid {
-                 /* 화면이 조금 좁아지면 2열로 변경 */
-                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            }
-        }
-    </style>
-    </head>
+  <style>
+    /* 기존 인라인 스타일 유지 + 경미한 접근성 보정 */
+    .section-subtitle{font-size:1.2rem;color:var(--color-text-light);text-align:center;margin-top:-40px;margin-bottom:60px}
+    .feature-showcase{padding:100px 0}
+    .feature-showcase.alt-bg{background-color:var(--color-light-gray)}
+    .feature-layout{display:flex;align-items:center;gap:50px}
+    .feature-layout.image-right{flex-direction:row-reverse}
+    .feature-image{flex:1;min-width:0}
+    .feature-text{flex:1}
+    .feature-text ul{list-style:none;padding-left:0}
+    .feature-text li{margin-bottom:30px}
+    .feature-text h3{font-size:1.5rem;color:var(--color-primary);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+    .feature-text h3 i{font-size:1.2rem;color:var(--color-secondary)}
+    .feature-text p{font-size:1.05rem;line-height:1.7;color:var(--color-text-light)}
+    .mockup-wrapper{width:100%;border-radius:12px;background:#fff;box-shadow:0 20px 50px rgba(0,0,0,.12);border:1px solid var(--color-border);overflow:hidden;font-family:'Pretendard',sans-serif}
+    .mockup-admin{display:flex;background:#F9FAFB}
+    .mockup-admin-sidebar{width:160px;background:linear-gradient(180deg,#0070f3 0%,#005bb5 100%);padding:20px 15px;color:rgba(255,255,255,.8);flex-shrink:0}
+    .mockup-admin-sidebar .logo{font-weight:700;font-size:1.1rem;margin-bottom:25px;color:#fff;word-break:break-all}
+    .mockup-admin-sidebar .menu-item{padding:8px 10px;border-radius:6px;font-size:.85rem;margin-bottom:5px;cursor:default;transition:background-color .2s ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mockup-admin-sidebar .menu-item:not(.active):hover{background-color:rgba(255,255,255,.1)}
+    .mockup-admin-sidebar .menu-item.active{background-color:rgba(255,255,255,.2);font-weight:600;color:#fff}
+    .mockup-admin-body{flex:1;min-width:0}
+    .mockup-admin-header{background:#fff;padding:12px 20px;border-bottom:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center}
+    .mockup-admin-header .title{font-size:1.1rem;font-weight:700}
+    .mockup-admin-header .icons{display:flex;gap:15px;color:#9CA3AF}
+    .mockup-admin-content{padding:20px}
+    .mockup-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:12px;margin-bottom:20px}
+    .mockup-card{background:#fff;padding:12px;border-radius:8px;border:1px solid var(--color-border);text-align:center}
+    .mockup-card .label{font-size:.8rem;color:var(--color-text-light);margin-bottom:6px;white-space:nowrap}
+    .mockup-card .value{font-size:1.5rem;font-weight:700;color:var(--color-text-dark);min-height:28px;line-height:1.2}
+    .mockup-card .unit{font-size:.9rem;font-weight:500;color:var(--color-text-light);margin-left:2px}
+    .mockup-chart-box{background:#fff;padding:15px;border-radius:8px;border:1px solid var(--color-border);height:160px}
+    .mockup-bar-chart{display:flex;justify-content:space-around;align-items:flex-end;height:100px;padding-top:10px}
+    .mockup-bar{width:10%;background-color:var(--color-primary);border-radius:4px 4px 0 0;opacity:.6}
+    .mockup-phone{max-width:320px;height:650px;margin:0 auto;background:#F9FAFB;border:8px solid #374151;border-radius:32px;box-shadow:0 25px 60px rgba(0,0,0,.2);padding:15px;overflow-y:auto;position:relative}
+    .mockup-phone::-webkit-scrollbar{display:none}.mockup-phone{-ms-overflow-style:none;scrollbar-width:none}
+    .mockup-phone-header{font-size:1.1rem;font-weight:700;text-align:center;padding:10px 0;border-bottom:2px solid var(--color-border);margin-bottom:15px}
+    .mockup-phone-section{background:#fff;border-radius:10px;padding:15px;margin-bottom:15px;border:1px solid var(--color-border)}
+    .mockup-phone-section h4{font-size:1rem;font-weight:600;margin-bottom:10px}
+    .lorem-bar{background-color:#E5E7EB;border-radius:4px;height:16px;margin-bottom:10px}
+    .lorem-bar.w-60{width:60%}.lorem-bar.w-80{width:80%}
+    .mockup-disclaimer{text-align:center;font-size:.9rem;color:var(--color-text-light);margin-top:20px}
+    @keyframes growBar{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+    .start-bar-animation .mockup-bar{transform-origin:bottom;animation:growBar 1s var(--transition-smooth) forwards;transform:scaleY(0)}
+    .start-bar-animation .mockup-bar:nth-child(1){animation-delay:.1s}
+    .start-bar-animation .mockup-bar:nth-child(2){animation-delay:.2s}
+    .start-bar-animation .mockup-bar:nth-child(3){animation-delay:.3s}
+    .start-bar-animation .mockup-bar:nth-child(4){animation-delay:.4s}
+    .start-bar-animation .mockup-bar:nth-child(5){animation-delay:.5s}
+    .start-bar-animation .mockup-bar:nth-child(6){animation-delay:.6s}
+    .start-bar-animation .mockup-bar:nth-child(7){animation-delay:.7s}
+    #tap-target-section{position:relative}
+    @keyframes tapFinger{0%,100%{transform:translateY(0) scale(1);opacity:0}10%,90%{transform:translateY(-10px) scale(1);opacity:1}50%{transform:translateY(-5px) scale(.95);opacity:1}}
+    .finger-tap-icon{position:absolute;bottom:50px;right:30px;font-size:1.8rem;color:var(--color-primary);opacity:0;animation:tapFinger 2.5s ease-in-out infinite;animation-delay:1.5s;pointer-events:none;z-index:10}
+    @media (max-width:900px){
+      .feature-layout{flex-direction:column!important}
+      .feature-text{text-align:center}
+      .feature-text h3{justify-content:center}
+      .mockup-admin-sidebar{display:none}
+      .mockup-admin-content{padding:15px}
+      .mockup-card-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+      .mockup-card .value{font-size:1.3rem;min-height:24px}
+      .mockup-card .label{font-size:.8rem}
+      .mockup-card .unit{font-size:.8rem}
+      .finger-tap-icon{font-size:1.5rem;bottom:40px;right:20px}
+    }
+    @media (max-width:1100px){
+      .mockup-card-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+    }
+  </style>
+</head>
 <body>
 
-    <header class="header">
-        <div class="container">
-            <a href="/index" class="logo">MediSwich</a>
-            <div class="header-right">
-                <nav class="nav">
-                    <a href="/index" class="nav-item">홈</a>
-                    <a href="/why-mediswich" class="nav-item">왜 메디스위치인가?</a>
-                    <div class="dropdown">
-                        <a href="/features" class="nav-item active">핵심 기능</a>
-                        <div class="dropdown-content">
-                            <a href="#admin-portal">관리자 포털</a>
-                            <a href="#patient-portal">예약자 셀프서비스</a>
-                            <a href="#corporate-portal">기업 포털</a>
-                            <a href="#security">보안 및 기술</a>
-                        </div>
-                    </div>
-                    <a href="/contact" class="nav-item">고객문의</a>
-                </nav>
-                <button id="open-contact-modal-features" class="cta-button primary">도입 문의하기</button>
-            </div>
+<header class="header">
+  <div class="container">
+    <a href="/" class="logo">MediSwich</a>
+    <div class="header-right">
+      <nav class="nav">
+        <a href="/" class="nav-item">홈</a>
+        <a href="/why-mediswich" class="nav-item">왜 메디스위치인가?</a>
+        <div class="dropdown">
+          <a href="/features" class="nav-item active">핵심 기능</a>
+          <div class="dropdown-content">
+            <a href="#admin-portal">관리자 포털</a>
+            <a href="#patient-portal">예약자 셀프서비스</a>
+            <a href="#corporate-portal">기업 포털</a>
+            <a href="#security">보안 및 기술</a>
+          </div>
         </div>
-    </header>
-
-    <section class="page-hero">
-        <div class="container">
-            <h1 class="fade-in-up">하나의 솔루션으로, <br> 검진 운영의 모든 것을 해결합니다.</h1>
-            <p class="subtitle fade-in-up delay-1">관리자, 예약자, 기업 고객 모두를 위한 맞춤형 기능으로 <br> 지금껏 경험하지 못한 운영 효율을 경험하세요.</p>
-        </div>
-    </section>
-
-    <section id="admin-portal" class="feature-showcase alt-bg">
-        <div class="container">
-            <h2 class="slide-in-left">🏥 01. 관리자 포털 (Control Tower)</h2>
-            <p class="section-subtitle">병원의 모든 운영을 제어하고, '병원 고유의 플랫폼'을 완성합니다.</p>
-            <div class="feature-layout image-left">
-                <div class="feature-image">
-                    <div class="mockup-wrapper fade-in-up">
-                        <div class="mockup-admin">
-                            <div class="mockup-admin-sidebar">
-                                <div class="logo">MediSwich</div>
-                                <div class="menu-item active">대시보드</div>
-                                <div class="menu-item">실시간 현황</div>
-                                <div class="menu-item">고객사 관리</div>
-                                <div class="menu-item">패키지 관리</div>
-                                <div class="menu-item">설정</div>
-                            </div>
-                            <div class="mockup-admin-body">
-                                <div class="mockup-admin-header">
-                                    <div class="title">대시보드</div>
-                                    <div class="icons">
-                                        <i class="fa-solid fa-bell"></i> <i class="fa-solid fa-user-circle"></i>
-                                    </div>
-                                </div>
-                                <div class="mockup-admin-content">
-                                    <div class="mockup-card-grid" id="admin-mockup-cards">
-                                        <div class="mockup-card" id="admin-card-1">
-                                            <div class="label">오늘 신규 요청</div>
-                                            <div class="value">0</div>
-                                        </div>
-                                        <div class="mockup-card" id="admin-card-2">
-                                            <div class="label">오늘 확정</div>
-                                            <div class="value">0</div>
-                                        </div>
-                                        <div class="mockup-card" id="admin-card-3">
-                                            <div class="label">7일 내 예약 수</div>
-                                            <div class="value">0</div>
-                                        </div>
-                                        <div class="mockup-card" id="admin-card-4">
-                                            <div class="label">오늘 가동률</div>
-                                            <div><span class="value">85</span><span class="unit">%</span></div>
-                                        </div>
-                                    </div>
-                                    <div class="mockup-chart-box">
-                                        <div class="label">14일 예약 추이</div>
-                                        <div class="mockup-bar-chart">
-                                            <div class="mockup-bar" style="height: 30%;"></div>
-                                            <div class="mockup-bar" style="height: 45%;"></div>
-                                            <div class="mockup-bar" style="height: 60%;"></div>
-                                            <div class="mockup-bar" style="height: 50%;"></div>
-                                            <div class="mockup-bar" style="height: 75%;"></div>
-                                            <div class="mockup-bar" style="height: 80%;"></div>
-                                            <div class="mockup-bar" style="height: 90%;"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mockup-disclaimer">*실제 프로그램을 기반으로 한 예시 화면입니다.</p>
-                </div>
-                <div class="feature-text slide-in-right">
-                    <ul>
-                        <li>
-                            <h3><i class="fa-solid fa-palette"></i>병원 맞춤 브랜딩 (No-Code)</h3>
-                            <p>코딩 없이 로고, 테마, 배너를 직접 설정하여 병원의 '격'을 높이는 프리미엄 예약 경험을 제공합니다.</p>
-                        </li>
-                        <li>
-                            <h3><i class="fa-solid fa-cubes"></i>검진 패키지 빌더</h3>
-                            <p>기업/공단/개별 등 수백 개의 복잡한 검진 상품도 자유롭게 생성하고 즉시 배포합니다.</p>
-                        </li>
-                        <li>
-                            <h3><i class="fa-solid fa-calendar-check"></i>간편한 케파(Capacity) 캘린더</h3>
-                            <p>관리자가 직접 날짜와 시간대별 예약 케파(Capa)를 설정하고 마감합니다. 예약자는 병원이 '오픈'한 슬롯에서만 예약이 가능하여, 이중 예약과 운영 오류를 원천 차단합니다.</p>
-                        </li>
-                        <li>
-                            <h3><i class="fa-solid fa-file-excel"></i>간편한 엑셀(EMR) 연동</h3>
-                            <p>병원의 기존 EMR(전산) 양식에 맞춘 '환자 등록용 엑셀' 출력을 지원합니다. 신규 예약자 데이터를 즉시 다운로드하여, 수기 입력으로 발생하던 오류와 시간을 획기적으로 단축시킵니다.</p>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section id="patient-portal" class="feature-showcase">
-        <div class="container">
-            <h2 class="slide-in-right">👤 02. 예약자 포털 (Premium CX)</h2>
-            <p class="section-subtitle">고객은 전화기 앞에서 기다릴 필요가 없습니다.</p>
-            <div class="feature-layout image-right">
-                <div class="feature-text slide-in-left">
-                    <ul>
-                        <li>
-                            <h3><i class="fa-solid fa-mobile-screen-button"></i>기다림 없는 24시간 셀프서비스</h3>
-                            <p>고객은 24시간 언제든 PC나 모바일에서 병원이 제공하는 패키지를 직접 선택하고, 가능한 날짜까지 스스로 확정합니다.</p>
-                        </li>
-                        <li>
-                            <h3><i class="fa-solid fa-user-check"></i>즉각적인 예약 관리</h3>
-                            <p>예약 변경, 취소, 확인 등의 모든 과정을 전화 대기 없이 즉시 처리하여, 불필요한 인콜을 줄이고 고객 만족도를 극대화합니다.</p>
-                        </li>
-                    </ul>
-                </div>
-                <div class="feature-image">
-                    <div class="mockup-wrapper fade-in-up" style="background: transparent; border: none; box-shadow: none;">
-                        <div class="mockup-phone">
-                            <div class="mockup-phone-header">검진 예약</div>
-                            <div class="mockup-phone-section">
-                                <h4>선택 패키지</h4>
-                                <div class="lorem-bar w-80"></div>
-                                <div style="text-align: right; font-weight: 600; font-size: 1.1rem;">300,000원</div>
-                            </div>
-                            <div class="mockup-phone-section">
-                                <h4>기본검사</h4>
-                                <div class="lorem-bar w-60"></div>
-                                <div class="lorem-bar w-80"></div>
-                            </div>
-                            <div class="mockup-phone-section" id="tap-target-section">
-                                <h4>선택검사 A (1개 선택)</h4>
-                                <div class="lorem-bar"></div>
-                                <div class="lorem-bar"></div>
-                                <div class="lorem-bar"></div>
-                                <i class="fa-solid fa-hand-pointer finger-tap-icon"></i>
-                            </div>
-                            <div class="mockup-phone-section">
-                                <h4>추가검사</h4>
-                                <div class="lorem-bar w-60"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mockup-disclaimer">*실제 프로그램을 기반으로 한 예시 화면입니다.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section id="corporate-portal" class="feature-showcase alt-bg">
-        <div class="container">
-            <h2 class="slide-in-left">🏢 03. 기업 포털 (B2B Cockpit)</h2>
-            <p class="section-subtitle">병원의 '진짜 고객', B2B 담당자의 행정 업무까지 자동화합니다.</p>
-            <div class="feature-layout image-left">
-                <div class="feature-image">
-                    <div class="mockup-wrapper fade-in-up">
-                        <div class="mockup-admin">
-                             <div class="mockup-admin-sidebar">
-                                <div class="logo">기업 포털</div>
-                                <div class="menu-item active">수검 현황</div>
-                                <div class="menu-item">서류 다운로드</div>
-                                <div class="menu-item">공지사항</div>
-                                <div class="menu-item">담당자 정보</div>
-                            </div>
-                            <div class="mockup-admin-body">
-                                <div class="mockup-admin-header">
-                                    <div class="title">(주)A기업 보건관리자</div>
-                                    <div class="icons">
-                                        <i class="fa-solid fa-right-from-bracket"></i>
-                                    </div>
-                                </div>
-                                <div class="mockup-admin-content">
-                                    <div class="mockup-card-grid" id="corp-mockup-cards">
-                                        <div class="mockup-card" id="corp-card-1">
-                                            <div class="label">총 임직원</div>
-                                            <div class="value">0</div>
-                                        </div>
-                                        <div class="mockup-card" id="corp-card-2">
-                                            <div class="label">수검 완료</div>
-                                            <div class="value">0</div>
-                                        </div>
-                                        <div class="mockup-card" id="corp-card-3">
-                                            <div class="label">미수검</div>
-                                            <div class="value">0</div>
-                                        </div>
-                                        <div class="mockup-card" id="corp-card-4">
-                                            <div class="label">수검률</div>
-                                             <div><span class="value">70</span><span class="unit">.0%</span></div>
-                                        </div>
-                                    </div>
-                                    <div class="mockup-chart-box">
-                                        <div class="label">사업장 보관용 서류 다운로드</div>
-                                        <div class="lorem-bar w-60" style="margin-top: 20px;"></div>
-                                        <div class="lorem-bar w-60"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mockup-disclaimer">*실제 프로그램을 기반으로 한 예시 화면입니다.</p>
-                </div>
-                <div class="feature-text slide-in-right">
-                    <ul>
-                        <li>
-                            <h3><i class="fa-solid fa-hands-holding-child"></i>'양방향' 행정 업무 감축</h3>
-                            <p>기업 담당자는 전용 포털에서 현황 리포트와 서류를 직접 확인합니다. 병원은 더 이상 '보고 전화'와 '서류 요청'에 응대할 필요가 없습니다.</p>
-                        </li>
-                        <li>
-                            <h3><i class="fa-solid fa-chart-pie"></i>실시간 수검 현황 모니터링</h3>
-                            <p>기업 담당자가 직접 임직원 명단을 업로드하고, 실시간 수검 현황(수검/미수검)을 모니터링하여 병원의 B2B 고객 관리가 간편해집니다.</p>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section id="security" class="reviews-section">
-        <div class="container">
-            <h2 class="slide-in-left">
-                기술력, 그리고 신뢰 (The Foundation)
-            </h2>
-            <div class="reviews-grid">
-                <div class="review-card fade-in-up">
-                    <div class="icon-small"><i class="fa-solid fa-file-excel"></i></div>
-                    <p class="quote"><strong>간편한 데이터 연동</strong><br>신규 예약자 데이터를 병원의 기존 EMR 양식에 맞춘 '맞춤형 엑셀'로 즉시 출력합니다. 수기 입력 시간을 획기적으로 단축시킵니다.</p>
-                </div>
-                <div class="review-card fade-in-up delay-1">
-                    <div class="icon-small"><i class="fa-solid fa-shield-halved"></i></div>
-                    <p class="quote"><strong>금융권 수준의 보안</strong><br>모든 통신은 TLS 1.3으로 암호화되며, RBAC, 감사로그, CSP 등 최신 보안 정책을 적용했습니다. 고객의 민감 정보는 가장 안전하게 보호됩니다.</p>
-                </div>
-                <div class="review-card fade-in-up delay-2">
-                    <div class="icon-small"><i class="fa-solid fa-server"></i></div>
-                    <p class="quote"><strong>안정적인 클라우드 아키텍처</strong><br>최신 클라우드 네이티브 아키텍처로 구축되어 트래픽 급증에도 안정적입니다. 모든 데이터는 실시간 PITR 백업로, 재해 시에도 안전하게 복구됩니다.</p>
-                </div>
-                 <div class="review-card fade-in-up delay-3">
-                    <div class="icon-small"><i class="fa-solid fa-rocket"></i></div>
-                    <p class="quote"><strong>압도적인 글로벌 성능</strong><br>글로벌 CDN 엣지 네트워크 기반의 캐싱과 SWR 재검증 전략을 통해, 사용자는 언제 어디서든 지연 없는 빠른 속도를 경험할 수 있습니다.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-info">
-                <p class="company-name">메디스위치 (MediSwich)</p>
-                <p>대표자: 박진석 | 대표번호: 1533-2405</p>
-                <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
-                <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
-            </div>
-            <div class="footer-links">
-                <a href="#">이용약관</a>
-                <a href="#">개인정보처리방침</a>
-                <a href="mailto:contact@mediswich.co.kr">contact@mediswich.co.kr</a>
-            </div>
-        </div>
-    </footer>
-
-    <div id="contact-modal" class="modal">
-        <div class="modal-content scale-in">
-            <span class="close-button">&times;</span>
-            <h3>도입 문의</h3>
-            <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
-            <form id="contact-form-modal">
-                <div class="form-group"><label for="modal-name-features">이름</label><input type="text" id="modal-name-features" name="name" required></div>
-                <div class="form-group"><label for="modal-hospital-features">병원명/회사명</label><input type="text" id="modal-hospital-features" name="hospital" required></div>
-                <div class="form-group"><label for="modal-phone-features">연락처</label><input type="tel" id="modal-phone-features" name="phone" required></div>
-                <div class="form-group"><label for="modal-email-features">이메일</label><input type="email" id="modal-email-features" name="email" required></div>
-                <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
-            </form>
-        </div>
+        <a href="/contact" class="nav-item">고객문의</a>
+      </nav>
+      <button id="open-contact-modal-features" class="cta-button primary">도입 문의하기</button>
     </div>
+  </div>
+</header>
 
-    <script src="script.js"></script>
+<section class="page-hero">
+  <div class="container">
+    <h1 class="fade-in-up">하나의 솔루션으로, <br> 검진 운영의 모든 것을 해결합니다.</h1>
+    <p class="subtitle fade-in-up delay-1">관리자, 예약자, 기업 고객 모두를 위한 맞춤형 기능으로 <br> 지금껏 경험하지 못한 운영 효율을 경험하세요.</p>
+  </div>
+</section>
 
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const countUp = (targetElement, endValue, duration = 1500, isPercentage = false) => {
-          let startValue = 0;
-          const element = document.querySelector(targetElement);
-          if (!element) return;
-          element.textContent = startValue + (isPercentage ? '%' : ''); // 초기값
+<section id="admin-portal" class="feature-showcase alt-bg">
+  <div class="container">
+    <h2 class="slide-in-left">🏥 01. 관리자 포털 (Control Tower)</h2>
+    <p class="section-subtitle">병원의 모든 운영을 제어하고, '병원 고유의 플랫폼'을 완성합니다.</p>
+    <div class="feature-layout image-left">
+      <div class="feature-image">
+        <div class="mockup-wrapper fade-in-up">
+          <div class="mockup-admin">
+            <div class="mockup-admin-sidebar">
+              <div class="logo">MediSwich</div>
+              <div class="menu-item active">대시보드</div>
+              <div class="menu-item">실시간 현황</div>
+              <div class="menu-item">고객사 관리</div>
+              <div class="menu-item">패키지 관리</div>
+              <div class="menu-item">설정</div>
+            </div>
+            <div class="mockup-admin-body">
+              <div class="mockup-admin-header">
+                <div class="title">대시보드</div>
+                <div class="icons">
+                  <i class="fa-solid fa-bell"></i> <i class="fa-solid fa-user-circle"></i>
+                </div>
+              </div>
+              <div class="mockup-admin-content">
+                <div class="mockup-card-grid" id="admin-mockup-cards">
+                  <div class="mockup-card" id="admin-card-1">
+                    <div class="label">오늘 신규 요청</div>
+                    <div class="value">0</div>
+                  </div>
+                  <div class="mockup-card" id="admin-card-2">
+                    <div class="label">오늘 확정</div>
+                    <div class="value">0</div>
+                  </div>
+                  <div class="mockup-card" id="admin-card-3">
+                    <div class="label">7일 내 예약 수</div>
+                    <div class="value">0</div>
+                  </div>
+                  <div class="mockup-card" id="admin-card-4">
+                    <div class="label">오늘 가동률</div>
+                    <div><span class="value">85</span><span class="unit">%</span></div>
+                  </div>
+                </div>
+                <div class="mockup-chart-box">
+                  <div class="label">14일 예약 추이</div>
+                  <div class="mockup-bar-chart">
+                    <div class="mockup-bar" style="height: 30%;"></div>
+                    <div class="mockup-bar" style="height: 45%;"></div>
+                    <div class="mockup-bar" style="height: 60%;"></div>
+                    <div class="mockup-bar" style="height: 50%;"></div>
+                    <div class="mockup-bar" style="height: 75%;"></div>
+                    <div class="mockup-bar" style="height: 80%;"></div>
+                    <div class="mockup-bar" style="height: 90%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mockup-disclaimer">*실제 프로그램을 기반으로 한 예시 화면입니다.</p>
+      </div>
+      <div class="feature-text slide-in-right">
+        <ul>
+          <li>
+            <h3><i class="fa-solid fa-palette"></i>병원 맞춤 브랜딩 (No-Code)</h3>
+            <p>코딩 없이 로고, 테마, 배너를 직접 설정하여 병원의 '격'을 높이는 프리미엄 예약 경험을 제공합니다.</p>
+          </li>
+          <li>
+            <h3><i class="fa-solid fa-cubes"></i>검진 패키지 빌더</h3>
+            <p>기업/공단/개별 등 수백 개의 복잡한 검진 상품도 자유롭게 생성하고 즉시 배포합니다.</p>
+          </li>
+          <li>
+            <h3><i class="fa-solid fa-calendar-check"></i>간편한 케파(Capacity) 캘린더</h3>
+            <p>관리자가 직접 날짜와 시간대별 예약 케파(Capa)를 설정하고 마감합니다. 예약자는 병원이 '오픈'한 슬롯에서만 예약이 가능하여, 이중 예약과 운영 오류를 원천 차단합니다.</p>
+          </li>
+          <li>
+            <h3><i class="fa-solid fa-file-excel"></i>간편한 엑셀(EMR) 연동</h3>
+            <p>병원의 기존 EMR(전산) 양식에 맞춘 '환자 등록용 엑셀' 출력을 지원합니다. 신규 예약자 데이터를 즉시 다운로드하여, 수기 입력으로 발생하던 오류와 시간을 획기적으로 단축시킵니다.</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
 
-          const range = endValue - startValue;
-          if (range === 0) {
-              element.textContent = endValue + (isPercentage ? (targetElement.includes('corp-card-4') ? '.0%' : '%') : '');
-              return;
-          }
-          let current = startValue;
-          const increment = endValue > startValue ? 1 : -1;
-          let stepTime = Math.abs(Math.floor(duration / range));
-          if (stepTime < 10) stepTime = 10;
+<section id="patient-portal" class="feature-showcase">
+  <div class="container">
+    <h2 class="slide-in-right">👤 02. 예약자 포털 (Premium CX)</h2>
+    <p class="section-subtitle">고객은 전화기 앞에서 기다릴 필요가 없습니다.</p>
+    <div class="feature-layout image-right">
+      <div class="feature-text slide-in-left">
+        <ul>
+          <li>
+            <h3><i class="fa-solid fa-mobile-screen-button"></i>기다림 없는 24시간 셀프서비스</h3>
+            <p>고객은 24시간 언제든 PC나 모바일에서 병원이 제공하는 패키지를 직접 선택하고, 가능한 날짜까지 스스로 확정합니다.</p>
+          </li>
+          <li>
+            <h3><i class="fa-solid fa-user-check"></i>즉각적인 예약 관리</h3>
+            <p>예약 변경, 취소, 확인 등의 모든 과정을 전화 대기 없이 즉시 처리하여, 불필요한 인콜을 줄이고 고객 만족도를 극대화합니다.</p>
+          </li>
+        </ul>
+      </div>
+      <div class="feature-image">
+        <div class="mockup-wrapper fade-in-up" style="background:transparent;border:none;box-shadow:none;">
+          <div class="mockup-phone">
+            <div class="mockup-phone-header">검진 예약</div>
+            <div class="mockup-phone-section">
+              <h4>선택 패키지</h4>
+              <div class="lorem-bar w-80"></div>
+              <div style="text-align:right;font-weight:600;font-size:1.1rem;">300,000원</div>
+            </div>
+            <div class="mockup-phone-section">
+              <h4>기본검사</h4>
+              <div class="lorem-bar w-60"></div>
+              <div class="lorem-bar w-80"></div>
+            </div>
+            <div class="mockup-phone-section" id="tap-target-section">
+              <h4>선택검사 A (1개 선택)</h4>
+              <div class="lorem-bar"></div>
+              <div class="lorem-bar"></div>
+              <div class="lorem-bar"></div>
+              <i class="fa-solid fa-hand-pointer finger-tap-icon"></i>
+            </div>
+            <div class="mockup-phone-section">
+              <h4>추가검사</h4>
+              <div class="lorem-bar w-60"></div>
+            </div>
+          </div>
+        </div>
+        <p class="mockup-disclaimer">*실제 프로그램을 기반으로 한 예시 화면입니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-          const timer = setInterval(() => {
-            current += increment;
-            element.textContent = current + (isPercentage ? (targetElement.includes('corp-card-4') ? '.0%' : '%') : '');
-            if (current == endValue) {
-              clearInterval(timer);
-            }
-          }, stepTime);
-        };
+<section id="corporate-portal" class="feature-showcase alt-bg">
+  <div class="container">
+    <h2 class="slide-in-left">🏢 03. 기업 포털 (B2B Cockpit)</h2>
+  <p class="section-subtitle">병원의 '진짜 고객', B2B 담당자의 행정 업무까지 자동화합니다.</p>
+    <div class="feature-layout image-left">
+      <div class="feature-image">
+        <div class="mockup-wrapper fade-in-up">
+          <div class="mockup-admin">
+            <div class="mockup-admin-sidebar">
+              <div class="logo">기업 포털</div>
+              <div class="menu-item active">수검 현황</div>
+              <div class="menu-item">서류 다운로드</div>
+              <div class="menu-item">공지사항</div>
+              <div class="menu-item">담당자 정보</div>
+            </div>
+            <div class="mockup-admin-body">
+              <div class="mockup-admin-header">
+                <div class="title">(주)A기업 보건관리자</div>
+                <div class="icons"><i class="fa-solid fa-right-from-bracket"></i></div>
+              </div>
+              <div class="mockup-admin-content">
+                <div class="mockup-card-grid" id="corp-mockup-cards">
+                  <div class="mockup-card" id="corp-card-1">
+                    <div class="label">총 임직원</div>
+                    <div class="value">0</div>
+                  </div>
+                  <div class="mockup-card" id="corp-card-2">
+                    <div class="label">수검 완료</div>
+                    <div class="value">0</div>
+                  </div>
+                  <div class="mockup-card" id="corp-card-3">
+                    <div class="label">미수검</div>
+                    <div class="value">0</div>
+                  </div>
+                  <div class="mockup-card" id="corp-card-4">
+                    <div class="label">수검률</div>
+                    <div><span class="value">70</span><span class="unit">.0%</span></div>
+                  </div>
+                </div>
+                <div class="mockup-chart-box">
+                  <div class="label">사업장 보관용 서류 다운로드</div>
+                  <div class="lorem-bar w-60" style="margin-top:20px;"></div>
+                  <div class="lorem-bar w-60"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mockup-disclaimer">*실제 프로그램을 기반으로 한 예시 화면입니다.</p>
+      </div>
+      <div class="feature-text slide-in-right">
+        <ul>
+          <li>
+            <h3><i class="fa-solid fa-hands-holding-child"></i>'양방향' 행정 업무 감축</h3>
+            <p>기업 담당자는 전용 포털에서 현황 리포트와 서류를 직접 확인합니다. 병원은 더 이상 '보고 전화'와 '서류 요청'에 응대할 필요가 없습니다.</p>
+          </li>
+          <li>
+            <h3><i class="fa-solid fa-chart-pie"></i>실시간 수검 현황 모니터링</h3>
+            <p>기업 담당자가 직접 임직원 명단을 업로드하고, 실시간 수검 현황(수검/미수검)을 모니터링하여 병원의 B2B 고객 관리가 간편해집니다.</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
 
-        const observerOptions = { threshold: 0.3 };
+<section id="security" class="reviews-section">
+  <div class="container">
+    <h2 class="slide-in-left">기술력, 그리고 신뢰 (The Foundation)</h2>
+    <div class="reviews-grid">
+      <div class="review-card fade-in-up">
+        <div class="icon-small"><i class="fa-solid fa-file-excel"></i></div>
+        <p class="quote"><strong>간편한 데이터 연동</strong><br>신규 예약자 데이터를 병원의 기존 EMR 양식에 맞춘 '맞춤형 엑셀'로 즉시 출력합니다. 수기 입력 시간을 획기적으로 단축시킵니다.</p>
+      </div>
+      <div class="review-card fade-in-up delay-1">
+        <div class="icon-small"><i class="fa-solid fa-shield-halved"></i></div>
+        <p class="quote"><strong>금융권 수준의 보안</strong><br>모든 통신은 TLS 1.3으로 암호화되며, RBAC, 감사로그, CSP 등 최신 보안 정책을 적용했습니다. 고객의 민감 정보는 가장 안전하게 보호됩니다.</p>
+      </div>
+      <div class="review-card fade-in-up delay-2">
+        <div class="icon-small"><i class="fa-solid fa-server"></i></div>
+        <p class="quote"><strong>안정적인 클라우드 아키텍처</strong><br>최신 클라우드 네이티브 아키텍처로 구축되어 트래픽 급증에도 안정적입니다. 모든 데이터는 실시간 PITR 백업로, 재해 시에도 안전하게 복구됩니다.</p>
+      </div>
+      <div class="review-card fade-in-up delay-3">
+        <div class="icon-small"><i class="fa-solid fa-rocket"></i></div>
+        <p class="quote"><strong>압도적인 글로벌 성능</strong><br>글로벌 CDN 엣지 네트워크 기반의 캐싱과 SWR 재검증 전략을 통해, 사용자는 언제 어디서든 지연 없는 빠른 속도를 경험할 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-        const observerCallback = (entries, observer) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const target = entry.target;
-              const targetId = target.id;
+<footer class="footer">
+  <div class="container">
+    <div class="footer-info">
+      <p class="company-name">메디스위치 (MediSwich)</p>
+      <p>대표자: 박진석 | 대표번호: 1533-2405</p>
+      <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
+      <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
+    </div>
+    <div class="footer-links">
+      <a href="#">이용약관</a>
+      <a href="#">개인정보처리방침</a>
+      <a href="mailto:contact@mediswich.co.kr">contact@mediswich.co.kr</a>
+    </div>
+  </div>
+</footer>
 
-              if (targetId === 'admin-mockup-cards') {
-                countUp('#admin-card-1 .value', 108);
-                countUp('#admin-card-2 .value', 92);
-                countUp('#admin-card-3 .value', 640);
-                countUp('#admin-card-4 .value', 85); // %는 CSS로 처리
-              } else if (targetId === 'corp-mockup-cards') {
-                countUp('#corp-card-1 .value', 500);
-                countUp('#corp-card-2 .value', 350);
-                countUp('#corp-card-3 .value', 150);
-                countUp('#corp-card-4 .value', 70); // %는 CSS로 처리
-              } else if (target.classList.contains('mockup-bar-chart')) {
-                  target.classList.add('start-bar-animation');
-              }
-              observer.unobserve(target);
-            }
-          });
-        };
+<div id="contact-modal" class="modal">
+  <div class="modal-content scale-in">
+    <span class="close-button">&times;</span>
+    <h3>도입 문의</h3>
+    <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
+    <form id="contact-form-modal">
+      <div class="form-group"><label for="modal-name-features">이름</label><input type="text" id="modal-name-features" name="name" required></div>
+      <div class="form-group"><label for="modal-hospital-features">병원명/회사명</label><input type="text" id="modal-hospital-features" name="hospital" required></div>
+      <div class="form-group"><label for="modal-phone-features">연락처</label><input type="tel" id="modal-phone-features" name="phone" required></div>
+      <div class="form-group"><label for="modal-email-features">이메일</label><input type="email" id="modal-email-features" name="email" required></div>
+      <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
+    </form>
+  </div>
+</div>
 
-        const observer = new IntersectionObserver(observerCallback, observerOptions);
-
-        const adminCards = document.getElementById('admin-mockup-cards');
-        const corpCards = document.getElementById('corp-mockup-cards');
-        const barCharts = document.querySelectorAll('.mockup-bar-chart');
-
-        if (adminCards) observer.observe(adminCards);
-        if (corpCards) observer.observe(corpCards);
-        barCharts.forEach(chart => observer.observe(chart));
-      });
-    </script>
+<script src="script.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const countUp = (sel, end, dur=1500, pct=false) => {
+    const el = document.querySelector(sel); if(!el) return;
+    let cur = 0; const step = end>0?1:-1; const rng = Math.abs(end);
+    const tick = Math.max(10, Math.floor(dur/Math.max(1,rng)));
+    const t = setInterval(() => {
+      cur += step; el.textContent = pct ? (sel.includes('corp-card-4')? (cur+'.0%') : (cur+'%')) : cur;
+      if (Math.abs(cur) >= Math.abs(end)) clearInterval(t);
+    }, tick);
+  };
+  const io = new IntersectionObserver((es,o)=>{
+    es.forEach(e=>{
+      if(!e.isIntersecting) return;
+      const id = e.target.id;
+      if(id==='admin-mockup-cards'){countUp('#admin-card-1 .value',108);countUp('#admin-card-2 .value',92);countUp('#admin-card-3 .value',640);countUp('#admin-card-4 .value',85);}
+      if(id==='corp-mockup-cards'){countUp('#corp-card-1 .value',500);countUp('#corp-card-2 .value',350);countUp('#corp-card-3 .value',150);countUp('#corp-card-4 .value',70);}
+      if(e.target.classList.contains('mockup-bar-chart')) e.target.classList.add('start-bar-animation');
+      o.unobserve(e.target);
+    });
+  },{threshold:0.3});
+  ['admin-mockup-cards','corp-mockup-cards'].forEach(id=>{const n=document.getElementById(id); if(n) io.observe(n);});
+  document.querySelectorAll('.mockup-bar-chart').forEach(n=>io.observe(n));
+});
+</script>
 </body>
 </html>

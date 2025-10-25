@@ -2,8 +2,23 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>메디스위치 | 병원 검진 예약 & 운영 플랫폼</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>메디스위치 | 왜 메디스위치인가?</title>
+  <meta name="description" content="메디스위치는 사람 중심의 자동화로 병원의 보이지 않는 비용을 병원 수익으로 전환합니다. 철학과 차별점을 확인하세요.">
+  <link rel="canonical" href="https://www.mediswich.co.kr/why-mediswich">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="메디스위치">
+  <meta property="og:url" content="https://www.mediswich.co.kr/why-mediswich">
+  <meta property="og:title" content="왜 메디스위치인가?">
+  <meta property="og:description" content="사람 중심의 자동화. 병원 인콜과 행정 비용을 수익으로 전환.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebPage","name":"왜 메디스위치인가?","url":"https://www.mediswich.co.kr/why-mediswich","publisher":{"@type":"Organization","name":"메디스위치","alternateName":["MediSwich","MediSwitch"]}}
+  </script>
+
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -13,10 +28,10 @@
 
   <header class="header">
     <div class="container">
-      <a href="/index" class="logo">MediSwich</a>
+      <a href="/" class="logo" aria-label="메디스위치 홈">MediSwich</a>
       <div class="header-right">
         <nav class="nav">
-          <a href="/index" class="nav-item">홈</a>
+          <a href="/" class="nav-item">홈</a>
           <a href="/why-mediswich" class="nav-item active">왜 메디스위치인가?</a>
           <div class="dropdown">
             <a href="/features" class="nav-item">핵심 기능</a>
@@ -40,7 +55,7 @@
       <p class="subtitle fade-in-up delay-1">고객의 예약 전화, 수기 작업의 오류, 파편화된 데이터... <br> 메디스위치는 이 모든 비효율을 제거하여 병원의 '병원 수익'으로 바꿉니다.</p>
     </div>
   </section>
-  
+
   <section class="about-section vision-section">
     <div class="container">
       <h2 class="slide-in-left">메디스위치의 철학: Human-Centered Automation</h2>
@@ -60,81 +75,115 @@
     </div>
   </section>
 
-  <section class="comparison-section-new">
+  <section class="comparison-section-static">
     <div class="container">
-        <h2 class="slide-in-right">SaaS 구독과 직접 개발, 무엇이 다를까요?</h2>
-        <div class="comparison-card-grid">
-            <div class="comparison-item fade-in-up">
-                <div class="problem-card">
-                    <div class="icon-header"><span class="emoji">🚫</span> BEFORE: 직접 개발(SI)의 고려사항</div>
-                    <h3>높은 초기 비용과 운영 리스크</h3>
-                    <p>높은 초기 구축 비용과 긴 개발 기간이 필요하며, 전문 인력을 통한 지속적인 유지보수와 보안 업데이트가 필수적입니다.</p>
-                </div>
-                <div class="icon-center">➡️</div>
-                <div class="solution-card">
-                    <div class="icon-header"><span class="emoji">💡</span> AFTER: MediSwich (SaaS)의 가치</div>
-                    <h3>합리적 구독, 신속한 도입</h3>
-                    <p>초기 구축 비용 없이 즉시 도입이 가능합니다. 월 구독료만으로 보안, 기능 업데이트, 트래픽 관리가 모두 해결되며, 병원은 '병원 수익' 창출이라는 본질에만 집중할 수 있습니다.</p>
-                </div>
+      <h2 class="slide-in-right">SaaS 구독과 직접 개발, 무엇이 다를까요?</h2>
+
+      <div class="comparison-grid">
+        <div class="comparison-card before-card fade-in-up delay-1">
+          <div class="icon-header"><i class="fa-solid fa-circle-exclamation"></i> BEFORE: 직접 개발(SI)</div>
+          <h3>높은 초기 비용과 운영 리스크</h3>
+          <p>높은 초기 구축 비용과 긴 개발 기간이 필요하며, 전문 인력을 통한 지속적인 유지보수와 보안 업데이트가 필수적입니다.</p>
+          <div class="comparison-visual">
+            <div class="placeholder-design before-design">
+              <div class="chaos-box box-1">
+                <div class="box-header"><i class="fa-solid fa-file-code"></i> 기획/개발</div>
+                <div class="box-content">...6개월 소요...</div>
+              </div>
+              <div class="chaos-box box-2">
+                <div class="box-header"><i class="fa-solid fa-server"></i> 서버/보안</div>
+                <div class="box-content">...인력 필요...</div>
+              </div>
+              <div class="chaos-box box-3">
+                <div class="box-header"><i class="fa-solid fa-bug"></i> 유지보수</div>
+                <div class="box-content">...비용 발생...</div>
+              </div>
             </div>
+          </div>
         </div>
+
+        <div class="comparison-card after-card fade-in-up delay-2">
+          <div class="icon-header"><i class="fa-solid fa-circle-check"></i> AFTER: MediSwich (SaaS)</div>
+          <h3>합리적 구독, 신속한 도입</h3>
+          <p>초기 구축 비용 없이 즉시 도입이 가능합니다. 월 구독료만으로 보안, 기능 업데이트, 트래픽 관리가 모두 해결되며, 병원은 '병원 수익' 창출이라는 본질에만 집중할 수 있습니다.</p>
+          <div class="comparison-visual">
+            <div class="placeholder-design after-design">
+              <div class="dash-sidebar">
+                <div class="dash-logo">MediSwich</div>
+                <div class="dash-menu"></div>
+                <div class="dash-menu"></div>
+                <div class="dash-menu w-60"></div>
+              </div>
+              <div class="dash-main">
+                <div class="dash-header"></div>
+                <div class="dash-content-box"></div>
+                <div class="dash-content-box small"></div>
+                <div class="dash-content-box small"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </section>
 
   <section class="about-section intro-section">
     <div class="container">
       <h2 class="slide-in-right">타협하지 않는 3가지 원칙</h2>
       <div class="value-intro-grid fade-in-up delay-1">
-        
+
         <div class="value-intro-card">
           <div class="icon-box"><i class="fa-solid fa-sliders"></i></div>
           <h3>압도적인 자율성</h3>
           <p>병원마다 다른 수십, 수백 개의 복잡한 검진 패키지와 기업별 정책. 코딩 없이, 관리자가 직접 모든 규칙을 설정하고 즉시 적용할 수 있는 강력한 자율성을 제공합니다.</p>
         </div>
-        
+
         <div class="value-intro-card">
           <div class="icon-box"><i class="fa-solid fa-network-wired"></i></div>
           <h3>완벽한 확장성</h3>
           <p>최신 멀티테넌트 아키텍처를 기반으로, 병원의 성장에 따라 유연하게 확장 가능합니다. 기존 EMR/HIS 시스템에 맞는 자료출력부터, 어떤 규모의 트래픽도 안정적으로 처리합니다.</p>
         </div>
-        
+
         <div class="value-intro-card">
           <div class="icon-box"><i class="fa-solid fa-shield-halved"></i></div>
           <h3>철저한 데이터 보안</h3>
           <p>민감한 의료 정보를 다루는 만큼, 금융권 수준의 보안을 적용합니다. 모든 데이터는 암호화되며, PITR 백업으로 언제든 복구 가능합니다. 병원의 데이터는 가장 안전하게 보호됩니다.</p>
         </div>
+
       </div>
     </div>
   </section>
 
   <footer class="footer">
-        <div class="container">
-            <div class="footer-info">
-                <p class="company-name">메디스위치 (MediSwich)</p>
-                <p>대표자: 박진석 | 대표번호: 1533-2405</p>
-                <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
-                <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
-            </div>
-            <div class="footer-links">
-                <a href="#">이용약관</a>
-                <a href="#">개인정보처리방침</a>
-                <a href="mailto:contact@mediswich.com">contact@mediswich.co.kr</a>
-            </div>
-        </div>
-    </footer>
-    
+    <div class="container">
+      <div class="footer-info">
+        <p class="company-name">메디스위치 (MediSwich)</p>
+        <p>대표자: 박진석 | 대표번호: 1533-2405</p>
+        <p>주소: 인천광역시 연수구 컨벤시아대로 165, 26층 브이630호(포스코타워-송도)</p>
+        <p>&copy; 2025 MediSwich Corporation. All rights reserved.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#">이용약관</a>
+        <a href="#">개인정보처리방침</a>
+        <a href="mailto:contact@mediswich.co.kr">contact@mediswich.co.kr</a>
+      </div>
+    </div>
+  </footer>
+
   <div id="contact-modal" class="modal">
-        <div class="modal-content scale-in">
-            <span class="close-button">&times;</span>
-            <h3>도입 문의</h3>
-            <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
-            <form id="contact-form-modal">
-                <div class="form-group"><label for="modal-name-about">이름</label><input type="text" id="modal-name-about" name="name" required></div>
-                <div class="form-group"><label for="modal-hospital-about">병원명/회사명</label><input type="text" id="modal-hospital-about" name="hospital" required></div>
-                <div class="form-group"><label for="modal-phone-about">연락처</label><input type="tel" id="modal-phone-about" name="phone" required></div>
-                <div class="form-group"><label for="modal-email-about">이메일</label><input type="email" id="modal-email-about" name="email" required></div>
-                <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
-            </form>
-        </div>
+    <div class="modal-content scale-in">
+      <span class="close-button">&times;</span>
+      <h3>도입 문의</h3>
+      <p>연락처를 남겨주시면, 병원 맞춤형 솔루션과 함께 전문가가 상세히 안내해 드립니다.</p>
+      <form id="contact-form-modal">
+        <div class="form-group"><label for="modal-name-about">이름</label><input type="text" id="modal-name-about" name="name" required></div>
+        <div class="form-group"><label for="modal-hospital-about">병원명/회사명</label><input type="text" id="modal-hospital-about" name="hospital" required></div>
+        <div class="form-group"><label for="modal-phone-about">연락처</label><input type="tel" id="modal-phone-about" name="phone" required></div>
+        <div class="form-group"><label for="modal-email-about">이메일</label><input type="email" id="modal-email-about" name="email" required></div>
+        <button type="submit" class="cta-button primary large full-width">상담 신청 및 소개서 받기</button>
+      </form>
+    </div>
   </div>
 
   <script src="script.js"></script>
