@@ -38,6 +38,7 @@ export function middleware(req: NextRequest) {
   const isPublic =
     p === "/" ||
     p === "/m/login" ||
+    p === "/m/logout" ||            // 공개 처리
     p.startsWith("/r") ||
     p.startsWith("/api/public/") ||
     p.startsWith("/api/auth/") ||
@@ -81,7 +82,7 @@ export function middleware(req: NextRequest) {
   const csp = [
     "default-src 'self'",
     `script-src ${["'self'", "'unsafe-inline'", "https://t1.daumcdn.net", "https://ssl.daumcdn.net", ...devScript].join(" ")}`,
-    `style-src 'self' 'unsafe-inline'`, // ← 인라인 스타일 허용
+    `style-src 'self' 'unsafe-inline'`,
     `img-src ${["'self'", "data:", "blob:", "https://*.daumcdn.net", "https://*.daum.net", "https://images.unsplash.com", ...httpDaum].join(" ")}`,
     `font-src 'self' data:`,
     `connect-src ${["'self'", ...(isProd ? [] : ["ws:", "http://localhost:3000"])].join(" ")}`,
