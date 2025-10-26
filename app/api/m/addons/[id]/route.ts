@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/m/addons/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth/guard";
 
 async function assertOwned(id: string, hid: string) {

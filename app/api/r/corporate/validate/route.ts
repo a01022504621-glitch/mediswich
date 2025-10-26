@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/r/corporate/validate/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { resolveHospitalId, validateCorporateCode } from "@/lib/repos/packages";
 
 export async function POST(req: NextRequest) {

@@ -1,10 +1,10 @@
-// mediswich/app/api/m/realtime/batch-status/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
+// mediswich/app/api/m/realtime/batch-status/route.ts
+ 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireOrg } from "@/lib/auth";
 
 /** YYYY-MM-DD 검사 */

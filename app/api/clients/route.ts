@@ -1,9 +1,9 @@
-// app/api/clients/route.ts
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+// app/api/clients/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { getCtx } from "@/lib/tenant";
 
 const d = (v?: Date | null) => (v ? v.toISOString().slice(0, 10) : "");

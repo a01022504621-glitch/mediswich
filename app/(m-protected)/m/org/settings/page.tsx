@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import BasicInfo from "./_components/BasicInfo.client";
 import PatientPageCustomizer from "./_components/PatientPageCustomizer.client";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth";
 
 /** 공통 카드 */

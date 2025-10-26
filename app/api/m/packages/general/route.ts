@@ -1,9 +1,11 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/m/packages/general/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import prisma, { runAs } from "@/lib/prisma-scope";
 
-const prisma = (globalThis as any).prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") (globalThis as any).prisma = prisma;
+ 
 
 function getHid(req: NextRequest): string | null {
   const hid = req.nextUrl.searchParams.get("hid");

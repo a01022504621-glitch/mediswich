@@ -1,9 +1,10 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/admin/provision/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { provisionHospitalOwner } from "@/lib/provision";
 import { requireSession } from "@/lib/auth";
-
-export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   const me = await requireSession().catch(() => null);

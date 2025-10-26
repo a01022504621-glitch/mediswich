@@ -1,9 +1,10 @@
-// app/api/capacity/calendar/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// app/api/capacity/calendar/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma-scope";
+ 
 
 type YMD = `${number}-${number}-${number}`;
 type ResKey = "basic" | "egd" | "col";

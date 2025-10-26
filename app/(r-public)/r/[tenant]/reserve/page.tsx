@@ -1,7 +1,7 @@
 // /app/(r-public)/r/[tenant]/reserve/page.tsx
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { allow } from "@/lib/rate/limiter";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";

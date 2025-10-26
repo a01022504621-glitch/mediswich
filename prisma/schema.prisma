@@ -102,20 +102,20 @@ model HospitalDomain {
 }
 
 model User {
-  id                 String     @id @default(cuid())
+  id                 String   @id @default(cuid())
   email              String
   password           String
   role               Role
-  hospitalId         String?
-  hospital           Hospital?  @relation(fields: [hospitalId], references: [id])
+  hospitalId         String
+  hospital           Hospital @relation(fields: [hospitalId], references: [id])
   sessions           Session[]
   auditLogs          AuditLog[]
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @default(now()) @updatedAt
-  mustChangePassword Boolean    @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+  mustChangePassword Boolean  @default(false)
 
-  @@unique([hospitalId, email])
-  @@index([email])
+  @@unique([hospitalId, email])  // 병원별 유니크
+  @@unique([email])              // 전역 유니크
 }
 
 model Session {
@@ -150,21 +150,28 @@ model Company {
  * ===== Packages =====
  */
 model Package {
-  id String @id @default(cuid())
+  id             String @id @default(cuid())
 
-  hospitalId String
-  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospitalId     String
+  hospital       Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  // 병원 내 고유 식별자(사람이 보는 슬러그)
+  slug           String?
+  // 내부 식별자(병원 내 유니크)
+  code           String  @default(cuid())
+  // 중복 생성 방지 키(요청 단위)
+  idempotencyKey String? @db.VarChar(64)
 
   // 특정 고객사 전용 패키지(기업 검진)
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  title    String
-  summary  String?         @db.Text
-  price    Int?
-  tags     Json?
-  visible  Boolean         @default(true)
-  category PackageCategory @default(GENERAL)
+  title       String
+  summary     String?         @db.Text
+  price       Int?
+  tags        Json?
+  visible     Boolean         @default(true)
+  category    PackageCategory @default(GENERAL)
 
   // ── 검진기간(선택)
   startDate DateTime?
@@ -179,6 +186,9 @@ model Package {
 
   bookings Booking[]
 
+  @@unique([hospitalId, code])
+  @@unique([hospitalId, slug])
+  @@unique([hospitalId, idempotencyKey])
   @@index([hospitalId, category, visible, clientId])
   @@index([hospitalId, visible, startDate, endDate])
 }
@@ -422,4 +432,5 @@ model Invoice {
 
   @@index([hospitalId, issuedAt])
 }
+
 

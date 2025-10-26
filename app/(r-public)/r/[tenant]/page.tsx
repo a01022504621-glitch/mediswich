@@ -1,7 +1,7 @@
 // app/(r-public)/r/[tenant]/page.tsx
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 import CatalogClient from "./_components/CatalogClient.client";
 import type { CSSProperties } from "react";

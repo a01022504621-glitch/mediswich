@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth/guard";
 import CurrentLocation from "./_components/CurrentLocation.client";
 import SidebarNav from "./_components/SidebarNav.client";

@@ -1,6 +1,6 @@
 // lib/auth.ts
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 
 // 정석 진입점: guard 재노출
 export {

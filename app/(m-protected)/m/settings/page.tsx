@@ -1,5 +1,5 @@
 // app/(m-protected)/m/settings/page.tsx
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { CSSProperties } from "react";

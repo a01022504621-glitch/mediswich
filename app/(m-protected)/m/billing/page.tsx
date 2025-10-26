@@ -1,5 +1,5 @@
 // app/(m-protected)/m/billing/page.tsx
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireOrg } from "@/lib/auth";
 
 export default async function BillingPage() {

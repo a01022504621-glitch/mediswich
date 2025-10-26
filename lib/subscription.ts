@@ -1,5 +1,5 @@
 // lib/subscription.ts
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 
 /** 개발/스테이징에서는 구독 가드를 느슨하게 */
 function isProd() {

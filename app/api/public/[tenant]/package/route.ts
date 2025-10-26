@@ -1,10 +1,11 @@
-// app/api/public/[tenant]/package/route.ts
 export const runtime = "nodejs";
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// app/api/public/[tenant]/package/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import prisma, { runAs } from "@/lib/prisma-scope";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
+ 
 
 /** -------------------- 작은 유틸 -------------------- */
 const BASIC_KEY = /^(basic|base|general|기본|베이직)$/i;
@@ -187,22 +188,21 @@ function derivePeriod(p: { startDate?: Date | null; endDate?: Date | null; tags?
 }
 
 /** -------------------- Handler -------------------- */
-export async function GET(req: NextRequest, { params }: { params: { tenant: string } }) {
+export async function GET(req: NextRequest, context: { params: { tenant: string } }) {
   try {
+    const { params } = context;
     const url = req.nextUrl;
     const idParam = url.searchParams.get("id")?.trim();
     const packageIdParam = url.searchParams.get("packageId")?.trim();
     const id = idParam || packageIdParam;
     if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
 
-    const hosp = await prisma.hospital.findFirst({
-      where: { slug: params.tenant },
-      select: { id: true },
-    });
-    if (!hosp) return NextResponse.json({ error: "tenant not found" }, { status: 404 });
+    const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
+    if (!t) return NextResponse.json({ error: "tenant not found" }, { status: 404 });
+    const hospitalId = t.id;
 
-    const pkg = await prisma.package.findFirst({
-      where: { id, hospitalId: hosp.id, visible: true },
+    const pkg = await runAs(hospitalId, () => prisma.package.findFirst({
+      where: { id, hospitalId: hospitalId, visible: true },
       select: {
         id: true,
         title: true,
@@ -213,7 +213,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
         startDate: true,
         endDate: true,
       },
-    });
+    }));
     if (!pkg) return NextResponse.json({ error: "not found" }, { status: 404 });
 
     const period = derivePeriod(pkg);

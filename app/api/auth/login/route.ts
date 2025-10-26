@@ -1,10 +1,10 @@
-// app/api/auth/login/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
+// app/api/auth/login/route.ts
+ 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import bcrypt from "bcryptjs";
 import { signSession, sessionCookie, expCookie, SESSION_TTL_SEC } from "@/lib/auth/jwt";
 import { timingSafeEqual } from "crypto";

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import type { CSSProperties } from "react";

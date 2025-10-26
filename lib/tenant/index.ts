@@ -1,7 +1,7 @@
 // /lib/tenant/index.ts
 import "server-only";
 import { requireSession } from "@/lib/auth/guard";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 
 export type TenantCtx = { hid: string; slug?: string | null };
 

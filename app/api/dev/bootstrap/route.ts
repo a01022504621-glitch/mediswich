@@ -1,10 +1,11 @@
-// app/api/dev/bootstrap/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
-
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// app/api/dev/bootstrap/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma-scope";
+import bcrypt from "bcryptjs";
+ 
 
 type Body = {
   hospital: { name: string; slug: string };

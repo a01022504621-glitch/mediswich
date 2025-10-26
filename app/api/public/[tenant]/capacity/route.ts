@@ -1,11 +1,12 @@
-// app/api/public/[tenant]/capacity/route.ts
 export const runtime = "nodejs";
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { createHash } from "crypto";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// app/api/public/[tenant]/capacity/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import prisma, { runAs } from "@/lib/prisma-scope";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
+import { createHash } from "crypto";
+ 
 
 type YMD = `${number}-${number}-${number}`;
 type ResKey = "basic" | "egd" | "col";
@@ -109,18 +110,21 @@ async function findClosedByResource(hospitalId: string, fromStart: Date, toNextS
   return map; // YMD -> { basic?:true, egd?:true, col?:true }
 }
 
-export async function GET(req: NextRequest, { params }: { params: { tenant: string } }) {
+export async function GET(req: NextRequest, context: { params: { tenant: string } }) {
   try {
+    const { params } = context;
     const url = new URL(req.url);
     const monthParam = (url.searchParams.get("month") || "").trim();
     const fromStr = (url.searchParams.get("from") || "").trim();
     const toStr = (url.searchParams.get("to") || "").trim();
     const resourcesParam = (url.searchParams.get("resources") || "").trim();
 
-    const hosp = await prisma.hospital.findFirst({ where: { slug: params.tenant }, select: { id: true } });
-    if (!hosp) {
+    const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
+    if (!t) {
       return NextResponse.json({ ok: false, error: "TENANT_NOT_FOUND" }, { status: 404, headers: { "cache-control": CC_PUBLIC } });
     }
+    const hosp = { id: t.id } as { id: string };
+    const hospitalId = t.id;
 
     /* (A) month=YYYY-MM → 공개 달력 상태 맵
        규칙:
@@ -135,11 +139,11 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       const fromStart = new Date(y, m, 1, 0, 0, 0, 0);
       const toNextStart = new Date(y, m + 1, 1, 0, 0, 0, 0);
 
-      const templates = await prisma.slotTemplate.findMany({
+      const templates = await runAs(hospitalId, () => prisma.slotTemplate.findMany({
         where: { hospitalId: hosp.id },
         select: { dow: true, start: true, end: true, capacity: true },
         orderBy: { start: "asc" },
-      });
+      }));
 
       const slotsByDow: Record<number, { time: string; cap: number }[]> = {};
       for (const t of templates) {
@@ -156,14 +160,14 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
         slotsByDow[t.dow] = times.map((time) => ({ time, cap: t.capacity }));
       }
 
-      const basicDefault = await getBasicDefaultCap(hosp.id);
-      const closedRes = await findClosedByResource(hosp.id, fromStart, toNextStart);
+      const basicDefault = await runAs(hospitalId, () => getBasicDefaultCap(hosp.id));
+      const closedRes = await runAs(hospitalId, () => findClosedByResource(hosp.id, fromStart, toNextStart));
 
       const activeStatuses = ["PENDING", "RESERVED", "CONFIRMED"] as const;
-      const bookings = await prisma.booking.findMany({
+      const bookings = await runAs(hospitalId, () => prisma.booking.findMany({
         where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart }, status: { in: activeStatuses as any } },
         select: { date: true },
-      });
+      }));
       const usedByDay = new Map<YMD, number>();
       for (const b of bookings) {
         const key = toYMD(b.date);
@@ -212,11 +216,11 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
     const fromStart = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 0, 0, 0, 0);
     const toNextStart = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate() + 1, 0, 0, 0, 0);
 
-    const templates = await prisma.slotTemplate.findMany({
+    const templates = await runAs(hospitalId, () => prisma.slotTemplate.findMany({
       where: { hospitalId: hosp.id },
       select: { dow: true, start: true, end: true, capacity: true },
       orderBy: { start: "asc" },
-    });
+    }));
 
     const slotsByDow: Record<number, { time: string; cap: number }[]> = {};
     for (const t of templates) {
@@ -233,14 +237,14 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       slotsByDow[t.dow] = times.map((time) => ({ time, cap: t.capacity }));
     }
 
-    const basicDefault = await getBasicDefaultCap(hosp.id);
-    const closedRes = await findClosedByResource(hosp.id, fromStart, toNextStart);
+    const basicDefault = await runAs(hospitalId, () => getBasicDefaultCap(hosp.id));
+    const closedRes = await runAs(hospitalId, () => findClosedByResource(hosp.id, fromStart, toNextStart));
 
     const activeStatuses = ["PENDING", "RESERVED", "CONFIRMED"] as const;
-    const bookings = await prisma.booking.findMany({
+    const bookings = await runAs(hospitalId, () => prisma.booking.findMany({
       where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart }, status: { in: activeStatuses as any } },
       select: { date: true },
-    });
+    }));
     const usedByDay = new Map<YMD, number>();
     for (const b of bookings) usedByDay.set(toYMD(b.date), (usedByDay.get(toYMD(b.date)) || 0) + 1);
 

@@ -1,6 +1,10 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/public/[tenant]/packages/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma, { runAs } from "@/lib/prisma-scope";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 
 /** ---------- 유틸 공통 ---------- */
 const BASIC_KEY = /^(basic|base|general|기본|베이직)$/i;
@@ -200,15 +204,15 @@ function derivePeriod(p: { startDate?: Date | null; endDate?: Date | null; tags?
 }
 
 /** ---------- Handler ---------- */
-export async function GET(_req: NextRequest, { params }: { params: { tenant: string; id: string } }) {
+export async function GET(req: NextRequest, context: { params: { tenant: string; id: string } }) {
   try {
-    const hospital = await prisma.hospital.findUnique({
-      where: { slug: params.tenant },
-      select: { id: true },
-    });
-    if (!hospital) return NextResponse.json({ ok: false, error: "Invalid tenant" }, { status: 404 });
+    const { params } = context;
+    const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
+    if (!t) return NextResponse.json({ ok: false, error: "Invalid tenant" }, { status: 404 });
+    const hospital = t;
+    const hospitalId = t.id;
 
-    const p = await prisma.package.findFirst({
+    const p = await runAs(hospitalId, () => prisma.package.findFirst({
       where: { id: params.id, hospitalId: hospital.id, visible: true },
       select: {
         id: true,
@@ -220,7 +224,7 @@ export async function GET(_req: NextRequest, { params }: { params: { tenant: str
         startDate: true,
         endDate: true,
       },
-    });
+    }));
     if (!p) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
 
     const period = derivePeriod(p);

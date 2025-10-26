@@ -1,5 +1,5 @@
 // lib/tenant/resolve.ts
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 
 /** 요청 인자 */
 export type Input = {

@@ -1,8 +1,8 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/clients/[id]/notify/route.ts
 // 선택한 대상자에게 알림톡(모의) 전송
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
 type SendBody = {
   channel: "ALIMTALK";
   template?: string;   // 메시지 템플릿(예: "{name}님, {client}...")

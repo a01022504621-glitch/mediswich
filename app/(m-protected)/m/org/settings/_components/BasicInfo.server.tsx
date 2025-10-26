@@ -1,6 +1,6 @@
 // app/(m-protected)/m/org/settings/_components/BasicInfo.server.tsx
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { getCtx } from "@/lib/tenant";
 import CopyPublicUrl from "./CopyPublicUrl.client";
 

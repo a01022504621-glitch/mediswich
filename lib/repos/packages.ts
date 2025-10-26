@@ -1,5 +1,5 @@
 // lib/repos/packages.ts
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import type { Package, PackageCategory } from "@prisma/client";
 
 /** 병원 식별: slug 우선 → 도메인(host) → 유일 병원 fallback */

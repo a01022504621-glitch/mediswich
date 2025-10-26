@@ -1,11 +1,12 @@
-// app/api/public/[tenant]/timeslots/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { createHash } from "crypto";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// app/api/public/[tenant]/timeslots/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import prisma, { runAs } from "@/lib/prisma-scope";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
+import { createHash } from "crypto";
+ 
 
 type YMD = `${number}-${number}-${number}`;
 type HM = `${number}:${number}`;
@@ -64,33 +65,33 @@ async function isClosedDay(hospitalId: string, dayStart: Date, nextStart: Date) 
   return false;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { tenant: string } }) {
+export async function GET(req: NextRequest, context: { params: { tenant: string } }) {
   try {
+    const { params } = context;
     const url = new URL(req.url);
     const dateStr = (url.searchParams.get("date") || "").trim(); // YYYY-MM-DD
 
     const date = parseISO(dateStr);
     if (!date) return NextResponse.json({ ok: false, error: "INVALID_DATE" }, { status: 400, headers: { "cache-control": "no-store" } });
 
-    const hosp = await prisma.hospital.findFirst({
-      where: { slug: params.tenant },
-      select: { id: true },
-    });
-    if (!hosp) return NextResponse.json({ ok: false, error: "TENANT_NOT_FOUND" }, { status: 404, headers: { "cache-control": CC_PUBLIC } });
+    const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
+    if (!t) return NextResponse.json({ ok: false, error: "TENANT_NOT_FOUND" }, { status: 404, headers: { "cache-control": CC_PUBLIC } });
+    const hosp = { id: t.id } as { id: string };
+    const hospitalId = t.id;
 
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
     const nextStart = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
 
     // 요일 템플릿 로드
     const dow = dayStart.getDay();
-    const templates = await prisma.slotTemplate.findMany({
-      where: { hospitalId: hosp.id, dow },
+    const templates = await runAs(hospitalId, () => prisma.slotTemplate.findMany({
+      where: { hospitalId: hospitalId, dow },
       select: { start: true, end: true, capacity: true },
       orderBy: { start: "asc" },
-    });
+    }));
 
     // 휴무/마감일
-    const closed = await isClosedDay(hosp.id, dayStart, nextStart);
+    const closed = await runAs(hospitalId, () => isClosedDay(hospitalId, dayStart, nextStart));
     if (closed) {
       const body = { ok: true, date: toYMD(dayStart), closed: true, reasons: ["해당 일자는 휴무/마감 처리되었습니다"], slots: [] as any[] };
       const json = JSON.stringify(body);
@@ -117,10 +118,10 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
     }
 
     // 예약 사용량 (date+time 단위)
-    const rows = await prisma.booking.findMany({
-      where: { hospitalId: hosp.id, date: { gte: dayStart, lt: nextStart }, status: { in: ["PENDING", "RESERVED", "CONFIRMED"] as any } },
+    const rows = await runAs(hospitalId, () => prisma.booking.findMany({
+      where: { hospitalId: hospitalId, date: { gte: dayStart, lt: nextStart }, status: { in: ["PENDING", "RESERVED", "CONFIRMED"] as any } },
       select: { time: true },
-    });
+    }));
 
     const usedByTime = new Map<string, number>();
     for (const r of rows) usedByTime.set(r.time, (usedByTime.get(r.time) ?? 0) + 1);

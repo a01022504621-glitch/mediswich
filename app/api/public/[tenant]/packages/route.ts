@@ -1,10 +1,11 @@
-// app/api/public/[tenant]/packages/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
+// app/api/public/[tenant]/packages/route.ts
+ 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma, { runAs } from "@/lib/prisma-scope";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 import { createHash } from "crypto";
 
 const CC_PUBLIC = "public, s-maxage=60, stale-while-revalidate=600";
@@ -196,21 +197,21 @@ function deriveBilling(tags: any, oneTimePrice: number | null) {
 }
 
 /* ===== Handler ===== */
-export async function GET(req: NextRequest, { params }: { params: { tenant: string } }) {
+export async function GET(req: NextRequest, context: { params: { tenant: string } }) {
   try {
+    const { params } = context;
     const url = new URL(req.url);
     const cat = normalizeCat(url.searchParams.get("cat") || url.searchParams.get("category"));
     const rawCode = (url.searchParams.get("code") || "").trim();
     const take = Math.min(Math.max(Number(url.searchParams.get("take") || 200), 1), 1000);
     const skip = Math.max(Number(url.searchParams.get("skip") || 0), 0);
 
-    const hospital = await prisma.hospital.findUnique({
-      where: { slug: params.tenant },
-      select: { id: true },
-    });
-    if (!hospital) {
+    const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
+    if (!t) {
       return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404, headers: { "cache-control": CC_PUBLIC } });
     }
+    const hospital = t;
+    const hospitalId = t.id;
 
     // 기본 where
     const where: any = { hospitalId: hospital.id, visible: true, category: cat };
@@ -227,10 +228,10 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
         const empty = { ok: true, packages: [], items: [], client: null };
         return NextResponse.json(empty, { headers: { "cache-control": CC_PUBLIC } });
       }
-      client = await prisma.client.findFirst({
+      client = await runAs(hospitalId, () => prisma.client.findFirst({
         where: { hospitalId: hospital.id, code: { equals: rawCode, mode: "insensitive" } },
         select: { id: true, name: true, code: true },
-      });
+      }));
       if (!client) {
         const empty = { ok: true, packages: [], items: [], client: null };
         return NextResponse.json(empty, { headers: { "cache-control": CC_PUBLIC } });
@@ -239,7 +240,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
       where.OR = [{ clientId: client.id }, { clientId: null }];
     }
 
-    const rows = await prisma.package.findMany({
+    const rows = await runAs(hospitalId, () => prisma.package.findMany({
       where,
       take,
       skip,
@@ -249,7 +250,7 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
         price: true, category: true, tags: true,
         startDate: true, endDate: true,
       },
-    });
+    }));
 
     // 기간 필터 + 파생 필드 구성
     const packages = rows

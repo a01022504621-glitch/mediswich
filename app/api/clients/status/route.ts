@@ -1,9 +1,9 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/clients/status/route.ts
 // 고객사 검진 현황 집계 API (인메모리 store 기준)
 // 기존에 /api/clients/[id]/route.ts 에서 쓰던 __MEM_CLIENTS__ 를 그대로 활용합니다.
-
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
 type Participant = {
   name: string;

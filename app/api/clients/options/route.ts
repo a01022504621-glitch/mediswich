@@ -1,10 +1,10 @@
-// mediswich/app/api/clients/options/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
+// mediswich/app/api/clients/options/route.ts
+ 
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireOrg } from "@/lib/auth";
 
 export async function GET() {

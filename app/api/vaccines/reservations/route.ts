@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/vaccines/reservations/route.ts
 import { NextRequest, NextResponse } from "next/server";
 // (나중에 prisma 연결할 때 getCtx()로 병원 ID 필터링)

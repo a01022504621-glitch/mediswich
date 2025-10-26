@@ -1,10 +1,10 @@
-// app/api/m/realtime/export/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
+// app/api/m/realtime/export/route.ts
+ 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireOrg } from "@/lib/auth";
 import { buildRealtimeWorkbook } from "@/lib/excel/realtimeExport";
 

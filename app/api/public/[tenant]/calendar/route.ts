@@ -1,6 +1,10 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/public/[tenant]/calendar/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma, { runAs } from "@/lib/prisma-scope";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 
 function ymd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -15,18 +19,18 @@ function dowMatches(dbDow: number, jsDow: number) {
   return false;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { tenant: string } }) {
+export async function GET(req: NextRequest, context: { params: { tenant: string } }) {
   try {
+    const { params } = context;
     const url = new URL(req.url);
     const month = (url.searchParams.get("month") || "").trim(); // YYYY-MM
     const section = (url.searchParams.get("section") || "").trim().toUpperCase(); // (옵션) GENERAL/NHIS/SPECIAL...
     const disableSunday = url.searchParams.get("disableSunday") === "1";
 
-    const hospital = await prisma.hospital.findUnique({
-      where: { slug: params.tenant },
-      select: { id: true },
-    });
-    if (!hospital) return NextResponse.json({ ok: false, error: "INVALID_TENANT" }, { status: 404 });
+    const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
+    if (!t) return NextResponse.json({ ok: false, error: "INVALID_TENANT" }, { status: 404 });
+    const hospital = t;
+    const hospitalId = t.id;
 
     const base = month && /^\d{4}-\d{2}$/.test(month)
       ? new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1)
@@ -39,20 +43,20 @@ export async function GET(req: NextRequest, { params }: { params: { tenant: stri
     const whereTpl: any = { hospitalId: hospital.id };
     if (section) whereTpl.section = section;
 
-    const templates = await prisma.slotTemplate.findMany({
+    const templates = await runAs(hospitalId, () => prisma.slotTemplate.findMany({
       where: whereTpl,
       select: { dow: true, start: true, end: true, capacity: true, /* section: true */ },
       orderBy: [{ start: "asc" }],
-    });
+    }));
 
     // 해당 월 예약 집계 (취소/노쇼 제외 필요 시 where에 status 조건 추가)
-    const bookings = await prisma.booking.findMany({
+    const bookings = await runAs(hospitalId, () => prisma.booking.findMany({
       where: {
         hospitalId: hospital.id,
         date: { gte: start as any, lt: end as any },
       },
       select: { date: true, time: true },
-    });
+    }));
 
     // key: YYYY-MM-DD|HH:mm → count
     const bookedMap = new Map<string, number>();

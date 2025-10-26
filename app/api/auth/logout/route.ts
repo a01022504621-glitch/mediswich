@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // app/api/auth/logout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME } from "@/lib/auth/jwt";

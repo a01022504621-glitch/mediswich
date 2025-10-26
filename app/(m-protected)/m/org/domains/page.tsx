@@ -1,5 +1,5 @@
 // app/(m-protected)/m/org/domains/page.tsx
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { requireOrg } from "@/lib/auth";
 import crypto from "crypto";
 

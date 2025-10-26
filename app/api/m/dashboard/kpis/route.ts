@@ -1,10 +1,11 @@
-// app/api/m/dashboard/kpis/route.ts
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/auth/guard";
-
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// app/api/m/dashboard/kpis/route.ts
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma-scope";
+import { requireSession } from "@/lib/auth/guard";
+ 
 
 function dayRange(d = new Date()) {
   const s = new Date(d); s.setHours(0, 0, 0, 0);

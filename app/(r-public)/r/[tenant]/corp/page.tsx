@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma-scope";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 
 export default async function CorpPage({
