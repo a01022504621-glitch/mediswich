@@ -1,3 +1,4 @@
+// app/api/auth/logout/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,7 +24,6 @@ function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }
       });
     }
   }
-  // best-effort
   res.cookies.delete(name);
 }
 
@@ -32,6 +32,9 @@ function clearAll(res: NextResponse) {
   expireAll(res, "msw_exp", { httpOnly: false });
   expireAll(res, "current_hospital_id", { httpOnly: true });
   expireAll(res, "current_hospital_slug", { httpOnly: true });
+  // 선택: CSRF류
+  expireAll(res, "msw_csrf", { httpOnly: false });
+  expireAll(res, "csrf", { httpOnly: false });
 
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.headers.set("Pragma", "no-cache");
@@ -49,4 +52,5 @@ export async function POST() {
   const res = NextResponse.json({ ok: true });
   return clearAll(res);
 }
+
 
