@@ -10,7 +10,12 @@ const ROOT = "mediswich.co.kr";
 const COOKIE = process.env.COOKIE_NAME || "msw_m";
 
 function isAuthed(req: NextRequest) {
-  return Boolean(req.cookies.get(COOKIE));
+  const token = req.cookies.get(COOKIE)?.value;
+  if (!token) return false;
+  const exp = Number(req.cookies.get("msw_exp")?.value || "0");
+  const now = Math.floor(Date.now() / 1000);
+  if (!exp || exp <= now) return false;
+  return true;
 }
 
 export function middleware(req: NextRequest) {
@@ -38,7 +43,6 @@ export function middleware(req: NextRequest) {
   const isPublic =
     p === "/" ||
     p === "/m/login" ||
-    p === "/m/logout" ||
     p.startsWith("/r") ||
     p.startsWith("/api/public/") ||
     p.startsWith("/api/auth/") ||
@@ -95,4 +99,5 @@ export function middleware(req: NextRequest) {
 
   return res;
 }
+
 
