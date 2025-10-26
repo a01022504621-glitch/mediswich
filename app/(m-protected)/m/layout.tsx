@@ -67,7 +67,7 @@ export default async function Layout({ children }: { children: ReactNode }) {
               <li><Link href="/m/manual" className="block rounded-lg px-3 py-2 hover:bg-white/10">메뉴얼 바로가기</Link></li>
               <li><Link href="/m/faq" className="block rounded-lg px-3 py-2 hover:bg-white/10">FAQ/문의하기</Link></li>
               <li><AddToHomeButton /></li>
-              <li className="pt-1"><Link href="/api/auth/logout" className="block rounded-lg px-3 py-2 hover:bg-white/10">로그아웃</Link></li>
+              <li className="pt-1"><a href="/api/auth/logout?next=/m/login" className="block rounded-lg px-3 py-2 hover:bg-white/10">로그아웃</a></li>
             </ul>
           </div>
         </div>
