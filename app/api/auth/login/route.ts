@@ -1,15 +1,14 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 // app/api/auth/login/route.ts
- 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
 import bcrypt from "bcryptjs";
 import { signSession, sessionCookie, expCookie, SESSION_TTL_SEC } from "@/lib/auth/jwt";
 import { timingSafeEqual } from "crypto";
 
-/* ── 간단 레이트리밋(IP당 10분 20회) ── */
 const glb = globalThis as unknown as { __loginRL?: Map<string, number[]> };
 glb.__loginRL ??= new Map();
 const WINDOW = 10 * 60 * 1000;
@@ -23,7 +22,6 @@ function passRateLimit(ip: string) {
   return true;
 }
 
-/* ── CSRF(Double Submit) ── */
 function parseCookies(h: string | null) {
   const m: Record<string, string> = {};
   if (!h) return m;
@@ -53,13 +51,11 @@ const CSRF_OFF = process.env.AUTH_CSRF_DISABLED === "1" || process.env.NODE_ENV 
 
 export async function POST(req: NextRequest) {
   try {
-    // 1) 레이트리밋
     const ip = getClientIp(req);
     if (!passRateLimit(ip)) {
       return NextResponse.json({ ok: false, message: "RATE_LIMITED" }, { status: 429 });
     }
 
-    // 2) CSRF 검사(프로덕션만)
     if (!CSRF_OFF) {
       const cookies = parseCookies(req.headers.get("cookie"));
       const headerToken = req.headers.get("x-csrf-token") || req.headers.get("x-xsrf-token") || "";
@@ -70,7 +66,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3) 입력
     const body = await req.json().catch(() => ({}));
     const emailRaw = typeof body.email === "string" ? body.email : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -79,18 +74,15 @@ export async function POST(req: NextRequest) {
     }
     const email = emailRaw.trim().toLowerCase();
 
-    // 4) 사용자 조회
     const user = await prisma.user.findFirst({
       where: { email },
       select: { id: true, email: true, password: true, role: true, hospitalId: true },
     });
     if (!user) return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
 
-    // 5) 비밀번호 검증
     const passOk = await bcrypt.compare(password, user.password);
     if (!passOk) return NextResponse.json({ ok: false, message: "INVALID_CREDENTIALS" }, { status: 401 });
 
-    // 6) 병원 확인
     if (!user.hospitalId) {
       return NextResponse.json({ ok: false, message: "USER_NOT_BOUND" }, { status: 409 });
     }
@@ -100,13 +92,7 @@ export async function POST(req: NextRequest) {
     });
     if (!hospital) return NextResponse.json({ ok: false, message: "HOSPITAL_NOT_FOUND" }, { status: 409 });
 
-    // 7) 세션 발급
-    const payload: {
-      sub: string;
-      role: typeof user.role;
-      hospitalSlug: string;
-      hospitalId: string;
-    } = {
+    const payload = {
       sub: user.id,
       role: user.role,
       hospitalSlug: hospital.slug ?? String(hospital.id),
@@ -114,7 +100,6 @@ export async function POST(req: NextRequest) {
     };
     const token = await signSession(payload);
 
-    // 8) 응답 + 쿠키 세팅(세션 + 현재 병원 컨텍스트)
     const res = NextResponse.json({ ok: true });
 
     const sc = sessionCookie(token, SESSION_TTL_SEC);
@@ -124,14 +109,15 @@ export async function POST(req: NextRequest) {
     const ec = expCookie(expUnix);
     res.cookies.set(ec.name, ec.value, ec.options);
 
-    // ── 핵심: 관리자 컨텍스트 쿠키(시크릿 창도 즉시 동작)
     const secure = process.env.NODE_ENV === "production";
+    const domain = secure ? ".mediswich.co.kr" : undefined;
     res.cookies.set("current_hospital_id", hospital.id, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
       secure,
       maxAge: SESSION_TTL_SEC,
+      domain,
     });
     res.cookies.set("current_hospital_slug", hospital.slug ?? "", {
       httpOnly: true,
@@ -139,6 +125,7 @@ export async function POST(req: NextRequest) {
       path: "/",
       secure,
       maxAge: SESSION_TTL_SEC,
+      domain,
     });
 
     return res;

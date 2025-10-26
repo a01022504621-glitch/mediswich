@@ -1,27 +1,34 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 // app/api/auth/logout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME } from "@/lib/auth/jwt";
 
-function clearCookies(res: NextResponse) {
+function kill(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
   const secure = process.env.NODE_ENV === "production";
-  const base = { secure, sameSite: "lax" as const, path: "/" };
+  const base = { secure, sameSite: "lax" as const, path: "/", httpOnly: !!opts.httpOnly };
 
-  // 1) delete (Next 14 제공)
-  res.cookies.delete(COOKIE_NAME);
-  res.cookies.delete("msw_exp");
+  // host-only
+  res.cookies.set(name, "", { ...base, maxAge: 0, expires: new Date(0) });
+  // domain cookie
+  if (secure) {
+    res.cookies.set(name, "", { ...base, maxAge: 0, expires: new Date(0), domain: ".mediswich.co.kr" });
+  }
+  // API helper delete (best effort)
+  res.cookies.delete(name);
+}
 
-  // 2) 호환: 만료 쿠키로 덮어쓰기
-  res.cookies.set(COOKIE_NAME, "", { ...base, httpOnly: true, maxAge: 0, expires: new Date(0) });
-  res.cookies.set("msw_exp", "", { ...base, maxAge: 0, expires: new Date(0) });
+function clearCookies(res: NextResponse) {
+  kill(res, COOKIE_NAME, { httpOnly: true });
+  kill(res, "msw_exp", { httpOnly: false });
+  kill(res, "current_hospital_id", { httpOnly: true });
+  kill(res, "current_hospital_slug", { httpOnly: true });
 
-  // 캐시 방지
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.headers.set("Pragma", "no-cache");
   res.headers.set("Expires", "0");
-
   return res;
 }
 
@@ -35,3 +42,4 @@ export async function POST() {
   const res = NextResponse.json({ ok: true });
   return clearCookies(res);
 }
+

@@ -105,7 +105,6 @@ export function sessionCookie(token: string, maxAgeSec = SESSION_TTL_SEC) {
       sameSite: "lax" as const,
       path: "/",
       maxAge: maxAgeSec,
-      // ✨ 1. domain: 운영 환경일 때 모든 서브도메인에서 쿠키를 공유하도록 설정
       domain: isProd ? ".mediswich.co.kr" : undefined,
     },
   };
@@ -124,7 +123,6 @@ export function expCookie(expUnixSec: number) {
       sameSite: "lax" as const,
       path: "/",
       maxAge,
-      // ✨ 2. domain: 세션 쿠키와 동일하게 설정하여 일관성 유지
       domain: isProd ? ".mediswich.co.kr" : undefined,
     },
   };
@@ -140,5 +138,6 @@ export function readExp(token: string): number | undefined {
     return undefined;
   }
 }
+
 
 

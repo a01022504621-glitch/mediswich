@@ -38,7 +38,7 @@ export function middleware(req: NextRequest) {
   const isPublic =
     p === "/" ||
     p === "/m/login" ||
-    p === "/m/logout" ||            // 공개 처리
+    p === "/m/logout" ||
     p.startsWith("/r") ||
     p.startsWith("/api/public/") ||
     p.startsWith("/api/auth/") ||
