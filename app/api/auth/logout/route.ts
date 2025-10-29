@@ -37,24 +37,9 @@ function appendExpire(res: NextResponse, name: string, opts: { httpOnly?: boolea
         secure: prod,
         sameSite: "lax",
       });
-      res.headers.append("Set-Cookie", line);
+      res.headers.append("set-cookie", line);
     }
   }
-}
-
-// Minimal clear using cookies API (single line)
-function expireMinimal(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
-  const prod = process.env.NODE_ENV === "production";
-  const domain = cookieDomain();
-  res.cookies.set(name, "", {
-    httpOnly: !!opts.httpOnly,
-    sameSite: "lax",
-    secure: prod,
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-    ...(domain ? { domain } : {}),
-  });
 }
 
 function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
@@ -84,11 +69,11 @@ function clearAll(res: NextResponse, host?: string) {
   // Critical session cookies: append multiple Set-Cookie lines for different domain/path
   appendExpire(res, COOKIE_NAME, { httpOnly: true }, host);
   appendExpire(res, EXP_COOKIE, { httpOnly: false }, host);
-  // Secondary cookies: minimal one-line clear
-  expireMinimal(res, "current_hospital_id", { httpOnly: true });
-  expireMinimal(res, "current_hospital_slug", { httpOnly: true });
-  expireMinimal(res, "csrf", { httpOnly: false });
-  expireMinimal(res, "msw_csrf", { httpOnly: false });
+  // Secondary cookies: also append (domain base + host-only) for Path=/ and /m
+  appendExpire(res, "current_hospital_id", { httpOnly: true }, host);
+  appendExpire(res, "current_hospital_slug", { httpOnly: true }, host);
+  appendExpire(res, "csrf", { httpOnly: false }, host);
+  appendExpire(res, "msw_csrf", { httpOnly: false }, host);
 
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.headers.set("Pragma", "no-cache");
