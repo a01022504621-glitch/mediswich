@@ -7,7 +7,7 @@ import { COOKIE_NAME, cookieDomain } from "@/lib/auth/jwt"; // 'msw_m'
 
 const EXP_COOKIE = "msw_exp";
 
-// Minimal expiration that mirrors how cookies are set during login
+// Expire with minimal set by default; for critical session cookies, widen scope
 function expire(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
   const prod = process.env.NODE_ENV === "production";
   const domain = cookieDomain();
@@ -20,8 +20,35 @@ function expire(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
     expires: new Date(0),
     ...(domain ? { domain } : {}),
   });
-  // Best-effort for cases where a cookie might have been set without domain in dev
-  res.cookies.delete(name);
+  // Best-effort host-only variant
+  res.cookies.set(name, "", {
+    httpOnly: !!opts.httpOnly,
+    sameSite: "lax",
+    secure: prod,
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
+}
+
+function expireWide(res: NextResponse, name: string, opts: { httpOnly?: boolean }, host?: string) {
+  const prod = process.env.NODE_ENV === "production";
+  const base = cookieDomain();
+  const hosts = Array.from(new Set([base, undefined, host].filter(Boolean))) as string[] | (undefined[]);
+  const paths = ["/", "/m"]; // keep small but cover common
+  for (const d of hosts as (string | undefined)[]) {
+    for (const p of paths) {
+      res.cookies.set(name, "", {
+        httpOnly: !!opts.httpOnly,
+        sameSite: "lax",
+        secure: prod,
+        path: p,
+        maxAge: 0,
+        expires: new Date(0),
+        ...(d ? { domain: d } : {}),
+      });
+    }
+  }
 }
 
 function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
@@ -47,9 +74,11 @@ function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }
   res.cookies.delete(name);
 }
 
-function clearAll(res: NextResponse) {
-  expire(res, COOKIE_NAME, { httpOnly: true });
-  expire(res, EXP_COOKIE, { httpOnly: false });
+function clearAll(res: NextResponse, host?: string) {
+  // Critical session cookies: clear across likely variants
+  expireWide(res, COOKIE_NAME, { httpOnly: true }, host);
+  expireWide(res, EXP_COOKIE, { httpOnly: false }, host);
+  // Secondary cookies: minimal clear
   expire(res, "current_hospital_id", { httpOnly: true });
   expire(res, "current_hospital_slug", { httpOnly: true });
   expire(res, "csrf", { httpOnly: false });
@@ -65,9 +94,11 @@ export async function GET(req: NextRequest) {
   const to = new URL(req.nextUrl);
   to.pathname = "/m/login";
   to.search = "";
-  return clearAll(NextResponse.redirect(to));
+  const res = NextResponse.redirect(to);
+  return clearAll(res, req.headers.get("host") || undefined);
 }
 
 export async function POST() {
-  return clearAll(NextResponse.json({ ok: true }));
+  const res = NextResponse.json({ ok: true });
+  return clearAll(res);
 }
