@@ -7,8 +7,43 @@ import { COOKIE_NAME, cookieDomain } from "@/lib/auth/jwt"; // 'msw_m'
 
 const EXP_COOKIE = "msw_exp";
 
-// Expire with minimal set by default; for critical session cookies, widen scope
-function expire(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
+// Serialize cookie string manually so we can append multiple Set-Cookie lines
+function serializeExpireCookie(name: string, opts: { path: string; domain?: string; httpOnly?: boolean; secure?: boolean; sameSite?: "lax" | "strict" | "none" }) {
+  const parts = [`${encodeURIComponent(name)}=`];
+  parts.push(`Path=${opts.path}`);
+  parts.push(`Expires=${new Date(0).toUTCString()}`);
+  parts.push(`Max-Age=0`);
+  if (opts.domain) parts.push(`Domain=${opts.domain}`);
+  if (opts.secure) parts.push(`Secure`);
+  if (opts.httpOnly) parts.push(`HttpOnly`);
+  if (opts.sameSite) parts.push(`SameSite=${opts.sameSite.charAt(0).toUpperCase()}${opts.sameSite.slice(1)}`);
+  return parts.join("; ");
+}
+
+function appendExpire(res: NextResponse, name: string, opts: { httpOnly?: boolean }, host?: string) {
+  const prod = process.env.NODE_ENV === "production";
+  const base = cookieDomain();
+  const domains: (string | undefined)[] = [];
+  if (base) domains.push(base);
+  if (host) domains.push(host);
+  domains.push(undefined); // host-only
+  const paths = ["/", "/m"]; // cover common
+  for (const d of domains) {
+    for (const p of paths) {
+      const line = serializeExpireCookie(name, {
+        path: p,
+        domain: d,
+        httpOnly: !!opts.httpOnly,
+        secure: prod,
+        sameSite: "lax",
+      });
+      res.headers.append("Set-Cookie", line);
+    }
+  }
+}
+
+// Minimal clear using cookies API (single line)
+function expireMinimal(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
   const prod = process.env.NODE_ENV === "production";
   const domain = cookieDomain();
   res.cookies.set(name, "", {
@@ -20,35 +55,6 @@ function expire(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
     expires: new Date(0),
     ...(domain ? { domain } : {}),
   });
-  // Best-effort host-only variant
-  res.cookies.set(name, "", {
-    httpOnly: !!opts.httpOnly,
-    sameSite: "lax",
-    secure: prod,
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-  });
-}
-
-function expireWide(res: NextResponse, name: string, opts: { httpOnly?: boolean }, host?: string) {
-  const prod = process.env.NODE_ENV === "production";
-  const base = cookieDomain();
-  const hosts = Array.from(new Set([base, undefined, host].filter(Boolean))) as string[] | (undefined[]);
-  const paths = ["/", "/m"]; // keep small but cover common
-  for (const d of hosts as (string | undefined)[]) {
-    for (const p of paths) {
-      res.cookies.set(name, "", {
-        httpOnly: !!opts.httpOnly,
-        sameSite: "lax",
-        secure: prod,
-        path: p,
-        maxAge: 0,
-        expires: new Date(0),
-        ...(d ? { domain: d } : {}),
-      });
-    }
-  }
 }
 
 function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
@@ -75,14 +81,14 @@ function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }
 }
 
 function clearAll(res: NextResponse, host?: string) {
-  // Critical session cookies: clear across likely variants
-  expireWide(res, COOKIE_NAME, { httpOnly: true }, host);
-  expireWide(res, EXP_COOKIE, { httpOnly: false }, host);
-  // Secondary cookies: minimal clear
-  expire(res, "current_hospital_id", { httpOnly: true });
-  expire(res, "current_hospital_slug", { httpOnly: true });
-  expire(res, "csrf", { httpOnly: false });
-  expire(res, "msw_csrf", { httpOnly: false });
+  // Critical session cookies: append multiple Set-Cookie lines for different domain/path
+  appendExpire(res, COOKIE_NAME, { httpOnly: true }, host);
+  appendExpire(res, EXP_COOKIE, { httpOnly: false }, host);
+  // Secondary cookies: minimal one-line clear
+  expireMinimal(res, "current_hospital_id", { httpOnly: true });
+  expireMinimal(res, "current_hospital_slug", { httpOnly: true });
+  expireMinimal(res, "csrf", { httpOnly: false });
+  expireMinimal(res, "msw_csrf", { httpOnly: false });
 
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.headers.set("Pragma", "no-cache");
