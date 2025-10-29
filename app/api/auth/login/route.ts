@@ -6,7 +6,7 @@ export const revalidate = 0;
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
 import bcrypt from "bcryptjs";
-import { signSession, sessionCookie, expCookie, SESSION_TTL_SEC } from "@/lib/auth/jwt";
+import { signSession, sessionCookie, expCookie, SESSION_TTL_SEC, cookieDomain } from "@/lib/auth/jwt";
 import { timingSafeEqual } from "crypto";
 
 const glb = globalThis as unknown as { __loginRL?: Map<string, number[]> };
@@ -110,14 +110,14 @@ export async function POST(req: NextRequest) {
     res.cookies.set(ec.name, ec.value, ec.options);
 
     const secure = process.env.NODE_ENV === "production";
-    const domain = secure ? ".mediswich.co.kr" : undefined;
+    const domain = cookieDomain();
     res.cookies.set("current_hospital_id", hospital.id, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
       secure,
       maxAge: SESSION_TTL_SEC,
-      domain,
+      ...(domain ? { domain } : {}),
     });
     res.cookies.set("current_hospital_slug", hospital.slug ?? "", {
       httpOnly: true,
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       path: "/",
       secure,
       maxAge: SESSION_TTL_SEC,
-      domain,
+      ...(domain ? { domain } : {}),
     });
 
     return res;
@@ -134,5 +134,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, message: "SERVER_ERROR" }, { status: 500 });
   }
 }
-
 

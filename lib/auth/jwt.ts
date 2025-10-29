@@ -40,6 +40,13 @@ async function getHmacKey(secret: string) {
   return _hmacKey;
 }
 
+// Resolve cookie domain centrally so login/logout use the same value
+export function cookieDomain(): string | undefined {
+  const v = (process.env.COOKIE_DOMAIN || "").trim();
+  if (v) return v;
+  return process.env.NODE_ENV === "production" ? ".mediswich.co.kr" : undefined;
+}
+
 export type JwtPayload = {
   sub?: string;
   role?: string;
@@ -105,7 +112,7 @@ export function sessionCookie(token: string, maxAgeSec = SESSION_TTL_SEC) {
       sameSite: "lax" as const,
       path: "/",
       maxAge: maxAgeSec,
-      domain: isProd ? ".mediswich.co.kr" : undefined,
+      domain: cookieDomain(),
     },
   };
 }
@@ -123,7 +130,7 @@ export function expCookie(expUnixSec: number) {
       sameSite: "lax" as const,
       path: "/",
       maxAge,
-      domain: isProd ? ".mediswich.co.kr" : undefined,
+      domain: cookieDomain(),
     },
   };
 }

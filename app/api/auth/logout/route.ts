@@ -3,9 +3,26 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE_NAME } from "@/lib/auth/jwt"; // 'msw_m'
+import { COOKIE_NAME, cookieDomain } from "@/lib/auth/jwt"; // 'msw_m'
 
 const EXP_COOKIE = "msw_exp";
+
+// Minimal expiration that mirrors how cookies are set during login
+function expire(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
+  const prod = process.env.NODE_ENV === "production";
+  const domain = cookieDomain();
+  res.cookies.set(name, "", {
+    httpOnly: !!opts.httpOnly,
+    sameSite: "lax",
+    secure: prod,
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+    ...(domain ? { domain } : {}),
+  });
+  // Best-effort for cases where a cookie might have been set without domain in dev
+  res.cookies.delete(name);
+}
 
 function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }) {
   const prod = process.env.NODE_ENV === "production";
@@ -31,12 +48,12 @@ function expireAll(res: NextResponse, name: string, opts: { httpOnly?: boolean }
 }
 
 function clearAll(res: NextResponse) {
-  expireAll(res, COOKIE_NAME, { httpOnly: true });
-  expireAll(res, EXP_COOKIE, { httpOnly: false });
-  expireAll(res, "current_hospital_id", { httpOnly: true });
-  expireAll(res, "current_hospital_slug", { httpOnly: true });
-  expireAll(res, "csrf", { httpOnly: false });
-  expireAll(res, "msw_csrf", { httpOnly: false });
+  expire(res, COOKIE_NAME, { httpOnly: true });
+  expire(res, EXP_COOKIE, { httpOnly: false });
+  expire(res, "current_hospital_id", { httpOnly: true });
+  expire(res, "current_hospital_slug", { httpOnly: true });
+  expire(res, "csrf", { httpOnly: false });
+  expire(res, "msw_csrf", { httpOnly: false });
 
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.headers.set("Pragma", "no-cache");
@@ -54,4 +71,3 @@ export async function GET(req: NextRequest) {
 export async function POST() {
   return clearAll(NextResponse.json({ ok: true }));
 }
-
