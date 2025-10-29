@@ -1,46 +1,38 @@
+// app/api/capacity/specials/route.ts  (외부 공개 GET 전용)
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-import { NextResponse } from "next/server";
+
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma-scope";
+import { resolveHidStrict } from "@/lib/tenant/resolve-hid";
 
 type Special = { id: string; name: string };
-type Store = { specials: Special[] };
 
-// 전역 메모리 저장소. 하드코딩 없음.
-function ensure(): Store {
-  const g = globalThis as any;
-  if (!g.__capacitySpecials || !Array.isArray(g.__capacitySpecials.specials)) {
-    g.__capacitySpecials = { specials: [] } as Store;
-  }
-  return g.__capacitySpecials as Store;
+async function ensureRow(hospitalId: string) {
+  const row = await prisma.capacitySetting.findUnique({ where: { hospitalId } });
+  if (row) return row;
+  return prisma.capacitySetting.create({
+    data: {
+      hospitalId,
+      defaults: { BASIC: 0, NHIS: 0, SPECIAL: 0 } as any,
+      examDefaults: {} as any,
+      specials: { items: [], labels: [] } as any,
+      managed: { manageBasic: false, manageEgd: false, manageCol: false, exams: [] } as any,
+    },
+  });
 }
 
-export async function GET() {
-  const S = ensure();
-  return NextResponse.json({ items: S.specials });
-}
+export async function GET(req: NextRequest) {
+  const hid = await resolveHidStrict(req).catch(() => null);
+  if (!hid) return NextResponse.json({ ok: false, error: "HOSPITAL_SCOPE_REQUIRED" }, { status: 400 });
 
-/** PUT body 예시
- * { set: Special[] } | { add: Special } | { removeIds: string[] }
- */
-export async function PUT(req: Request) {
-  const S = ensure();
-  const body = await req.json().catch(() => ({}));
-
-  const norm = (x: any): Special | null =>
-    x && typeof x.id === "string" && typeof x.name === "string" ? { id: x.id, name: x.name } : null;
-
-  if (Array.isArray(body.set)) {
-    S.specials = body.set.map(norm).filter(Boolean) as Special[];
-  } else if (body.add) {
-    const v = norm(body.add);
-    if (v && !S.specials.some((s) => s.id === v.id)) S.specials.push(v);
-  } else if (Array.isArray(body.removeIds)) {
-    const del = new Set(body.removeIds.map(String));
-    S.specials = S.specials.filter((s) => !del.has(s.id));
-  }
-
-  return NextResponse.json({ items: S.specials });
+  const row = await ensureRow(hid);
+  const items = ((row.specials as any)?.items as Special[] | undefined) ?? [];
+  return NextResponse.json(
+    { items },
+    { headers: { "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=120" } },
+  );
 }
 
 

@@ -1,10 +1,13 @@
+// app/api/capacity/calendar/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// app/api/capacity/calendar/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
- 
+import { cookies, headers } from "next/headers";
+import { requireSession } from "@/lib/auth/guard";
+import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 
 type YMD = `${number}-${number}-${number}`;
 type ResKey = "basic" | "egd" | "col";
@@ -31,7 +34,7 @@ const toResKey = (v?: string | null): ResKey | null => {
   return null;
 };
 
-// --- 날짜 파서(문자/숫자/Date 모두 허용: YYYY-MM-DD는 로컬 자정으로 처리)
+// ── 유틸: 날짜 파서 ────────────────────────────────────────────────────────────
 function parseAnyDate(v: any): Date | null {
   if (!v) return null;
   if (v instanceof Date && !Number.isNaN(v.getTime())) return v;
@@ -62,14 +65,54 @@ function pickFromMeta(meta: any, keys: string[]): Date | null {
 // 완료일 > 확정일 > 예약일
 function effectiveDate(row: { date: Date; meta?: any }): Date {
   const done =
-    pickFromMeta(row.meta, ["completedDate", "검진완료일", "completeDate", "completed_at", "doneAt", "finishedAt"]) ||
-    null;
+    pickFromMeta(row.meta, ["completedDate", "검진완료일", "completeDate", "completed_at", "doneAt", "finishedAt"]) || null;
   const confirmed =
-    pickFromMeta(row.meta, ["confirmedDate", "예약확정일", "reserveConfirmedAt", "confirmed_at", "reservationConfirmedAt", "reservedDate"]) ||
-    null;
+    pickFromMeta(row.meta, [
+      "confirmedDate",
+      "예약확정일",
+      "reserveConfirmedAt",
+      "confirmed_at",
+      "reservationConfirmedAt",
+      "reservedDate",
+    ]) || null;
   return (done || confirmed || row.date) as Date;
 }
 
+// ── 병원 스코프 해석: 쿠키 → 쿼리 → 세션 → 호스트 ─────────────────────────────
+async function resolveHospitalId(req: NextRequest): Promise<string | null> {
+  try {
+    const url = new URL(req.url);
+    const hidFromQuery = url.searchParams.get("hid") || "";
+    const ck = cookies();
+    const hd = headers();
+
+    const hidFromCookie = ck.get("current_hospital_id")?.value || "";
+
+    let hidFromSession = "";
+    try {
+      const session = await requireSession(false); // 공개에서도 실패 허용
+      hidFromSession = (session as any)?.hid || (session as any)?.hospitalId || "";
+    } catch {
+      // ignore
+    }
+
+    const host = hd.get("x-forwarded-host") ?? hd.get("host") ?? "";
+    let hidFromHost = "";
+    try {
+      const t = await resolveTenantHybrid({ host });
+      hidFromHost = t?.id || "";
+    } catch {
+      // ignore
+    }
+
+    const hid = hidFromCookie || hidFromQuery || hidFromSession || hidFromHost || "";
+    return hid || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── 핸들러 ────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
@@ -78,16 +121,16 @@ export async function GET(req: NextRequest) {
     if (!rng) return NextResponse.json({ ok: false, error: "INVALID_MONTH" }, { status: 400 });
     const [fromStart, toNextStart] = rng;
 
-    // 단일 병원
-    const hosp = await prisma.hospital.findFirst({ select: { id: true } });
-    if (!hosp) return NextResponse.json({ ok: false, error: "HOSP_NOT_FOUND" }, { status: 404 });
+    const hospitalId = await resolveHospitalId(req);
+    if (!hospitalId) return NextResponse.json({ ok: false, error: "HOSPITAL_SCOPE_REQUIRED" }, { status: 400 });
 
     // 요일 템플릿 → cap 합산
     const templates = await prisma.slotTemplate.findMany({
-      where: { hospitalId: hosp.id },
+      where: { hospitalId },
       select: { dow: true, start: true, end: true, capacity: true },
       orderBy: { start: "asc" },
     });
+
     const capByDow: Record<number, number> = {};
     for (const t of templates) {
       const [sh, sm] = t.start.split(":").map(Number);
@@ -109,7 +152,7 @@ export async function GET(req: NextRequest) {
 
     try {
       const cos = await (prisma as any).capacityOverride.findMany({
-        where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart }, isClosed: true },
+        where: { hospitalId, date: { gte: fromStart, lt: toNextStart }, isClosed: true },
         select: { date: true, type: true },
       });
       for (const r of cos) addClosed(r.date, toResKey((r as any).type) || "basic");
@@ -122,25 +165,29 @@ export async function GET(req: NextRequest) {
     ] as const) {
       try {
         const rows = await (prisma as any)[lg.model].findMany({
-          where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart } },
+          where: { hospitalId, date: { gte: fromStart, lt: toNextStart } },
           select: lg.select,
         });
         for (const r of rows) addClosed((r as any).date, "basic");
       } catch {}
     }
+
     try {
       const holis = await (prisma as any).holiday.findMany({
-        where: { hospitalId: hosp.id, date: { gte: fromStart, lt: toNextStart }, closed: true },
+        where: { hospitalId, date: { gte: fromStart, lt: toNextStart }, closed: true },
         select: { date: true },
       });
       for (const r of holis) addClosed((r as any).date, "basic");
     } catch {}
 
-    // 사용량 집계: 스키마 필드만 조회. 효과일자는 meta에서 해석.
+    // 사용량 집계
     const books = await prisma.booking.findMany({
       where: {
-        hospitalId: hosp.id,
-        date: { gte: new Date(fromStart.getFullYear(), fromStart.getMonth() - 1, 1), lt: new Date(toNextStart.getFullYear(), toNextStart.getMonth() + 1, 1) }, // 여유 범위
+        hospitalId,
+        date: {
+          gte: new Date(fromStart.getFullYear(), fromStart.getMonth() - 1, 1),
+          lt: new Date(toNextStart.getFullYear(), toNextStart.getMonth() + 1, 1),
+        },
       },
       select: { date: true, meta: true },
     });
@@ -154,8 +201,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 응답 구성
-    const days: Record<YMD, { cap: number; used: number; closed: { basic: boolean; egd: boolean; col: boolean } }> = {};
+    // 응답
+    const days: Record<
+      YMD,
+      { cap: number; used: number; closed: { basic: boolean; egd: boolean; col: boolean } }
+    > = {};
+
     for (let d = new Date(fromStart); d < toNextStart; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
       const iso = toYMD(d);
       const dow = d.getDay();
@@ -175,6 +226,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: e?.message || "INTERNAL" }, { status: 500 });
   }
 }
+
 
 
 

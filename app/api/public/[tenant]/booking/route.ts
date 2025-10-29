@@ -1,11 +1,12 @@
+// app/api/public/[tenant]/booking/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// app/api/public/[tenant]/booking/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma, { runAs } from "@/lib/prisma-scope";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";
- 
+import { pickEffectiveDate } from "@/lib/services/booking-effective-date";
 
 /* ── 간단 레이트리밋: 10분 15회/IP */
 type RLState = { c: number; t: number };
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
     const t = await resolveTenantHybrid({ slug: params.tenant, host: req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "" });
     if (!t) return NextResponse.json({ error: "tenant not found" }, { status: 404 });
     const hospitalId = t.id;
-    // 레이트리밋
+
     const ip =
       (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
       req.headers.get("x-real-ip") ||
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
     if (!allow(ip)) {
       return new NextResponse("Too Many Requests", { status: 429, headers: { "Retry-After": "600" } });
     }
-    await new Promise((r) => setTimeout(r, 300)); // 봇 완화
+    await new Promise((r) => setTimeout(r, 300));
 
     const body = await req.json();
     const {
@@ -174,11 +175,11 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
     }
     if (!corpNameFinal && pkg.clientId) {
       const client = await runAs(hospitalId, () =>
-       prisma.client.findFirst({
-        where: { id: (pkg.clientId ?? undefined), hospitalId },
-        select: { id: true, name: true, code: true },
-      })
-     );
+        prisma.client.findFirst({
+          where: { id: (pkg.clientId ?? undefined), hospitalId },
+          select: { id: true, name: true, code: true },
+        })
+      );
       if (client) {
         corpNameFinal = client.name || null;
         corpCodeFinal = client.code || corpCodeFinal;
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
       examCodes: snapIn?.examCodes || "",
     };
 
-    const metaOut = {
+    const metaOut: any = {
       ...(metaIn || {}),
       foreigner: !!foreigner,
       email: email || null,
@@ -226,6 +227,10 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
       healthCert: !!healthCert || !!metaIn.healthCert || false,
     };
 
+    // 효과일 저장(meta.effectiveDate, YYYY-MM-DD)
+    const eff = pickEffectiveDate({ date: dayStart, meta: metaOut });
+    metaOut.effectiveDate = toYMD(eff);
+
     // 아이덴포턴시: 병원 스코프 + findFirst
     const idem = (req.headers.get("idempotency-key") || "").slice(0, 64);
     if (idem) {
@@ -238,45 +243,38 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
       }
     }
 
-    // 생성
-    try {
-      const created = await runAs(hospitalId, () => prisma.booking.create({
-        data: {
-          hospitalId: hospitalId,
-          packageId: pkg.id,
-          date: dayStart,
-          time: dt.hhmm,
-          name: String(name),
-          phone: String(phone),
-          phoneNormalized: phoneDigits || null,
-          patientBirth: birth ? String(birth) : null,
-          sex: sexEnum as any,
-          status: ((): any => {
-            const s = String(status || "").toUpperCase();
-            if (s === "REQUESTED") return "PENDING";
-            if (["PENDING", "RESERVED", "CONFIRMED"].includes(s)) return s;
-            return "PENDING";
-          })(),
-          meta: metaOut,
-          idempotencyKey: idem || null,
-        },
-        select: { id: true, code: true },
-      }));
-      return NextResponse.json({ ok: true, id: created.id, code: created.code }, { status: 201, headers: { "cache-control": "no-store" } });
-    } catch (e: any) {
-      if (e?.code === "P2002" && idem) {
-        const existed = await runAs(hospitalId, () => prisma.booking.findFirst({
-          where: { hospitalId: hospitalId, idempotencyKey: idem },
-          select: { id: true, code: true },
-        }));
-        if (existed) return NextResponse.json({ ok: true, id: existed.id, code: existed.code }, { status: 200 });
-      }
-      throw e;
-    }
+    const created = await runAs(hospitalId, () => prisma.booking.create({
+      data: {
+        hospitalId: hospitalId,
+        packageId: pkg.id,
+        date: dayStart,
+        time: dt.hhmm,
+        name: String(name),
+        phone: String(phone),
+        phoneNormalized: phoneDigits || null,
+        patientBirth: birth ? String(birth) : null,
+        sex: sexEnum as any,
+        status: ((): any => {
+          const s = String(status || "").toUpperCase();
+          if (s === "REQUESTED") return "PENDING";
+          if (["PENDING", "RESERVED", "CONFIRMED"].includes(s)) return s;
+          return "PENDING";
+        })(),
+        meta: metaOut,
+        idempotencyKey: idem || null,
+      },
+      select: { id: true, code: true },
+    }));
+
+    return NextResponse.json(
+      { ok: true, id: created.id, code: created.code },
+      { status: 201, headers: { "cache-control": "no-store" } },
+    );
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
+
 
 
 

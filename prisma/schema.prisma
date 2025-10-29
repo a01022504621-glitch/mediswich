@@ -82,6 +82,9 @@ model Hospital {
   capacityDefaults  CapacityDefault?
   capacityOverrides CapacityOverride[]
 
+  // 새 영속 설정
+  capacitySettings  CapacitySetting?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -257,6 +260,27 @@ model CapacityDefault {
 }
 
 /**
+ * 병원별 용량·특검·관리대상 **영속 설정**
+ */
+model CapacitySetting {
+  id          String   @id @default(cuid())
+  hospitalId  String   @unique
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  // { BASIC, NHIS, SPECIAL }
+  defaults     Json
+  // { [examId]: number }
+  examDefaults Json
+  // { items: [{id,name}], labels?: string[] }
+  specials     Json
+  // { manageBasic, manageEgd, manageCol, exams: string[] }
+  managed      Json
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+/**
  * ===== Bookings =====
  */
 model Booking {
@@ -274,6 +298,9 @@ model Booking {
   date DateTime
   time String
 
+  // 집계 최적화를 위한 효과일(완료>확정>예약일)
+  effectiveDate DateTime? @map("effective_date")
+
   name            String
   phone           String
   phoneNormalized String?
@@ -290,8 +317,8 @@ model Booking {
 
   @@unique([hospitalId, code])
   @@index([hospitalId, date])
-  @@index([hospitalId, phoneNormalized])
   @@index([hospitalId, date, time])
+  @@index([hospitalId, effectiveDate])
 }
 
 /**
@@ -432,5 +459,6 @@ model Invoice {
 
   @@index([hospitalId, issuedAt])
 }
+
 
 

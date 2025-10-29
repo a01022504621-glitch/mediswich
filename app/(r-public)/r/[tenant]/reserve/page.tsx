@@ -1,13 +1,18 @@
-// /app/(r-public)/r/[tenant]/reserve/page.tsx
+// app/(r-public)/r/[tenant]/reserve/page.tsx
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma-scope";
 import { allow } from "@/lib/rate/limiter";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";
+import { pickEffectiveDate } from "@/lib/services/booking-effective-date";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+type YMD = `${number}-${number}-${number}`;
+const toYMD = (d: Date): YMD =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` as YMD;
 
 function ipFromHeaders() {
   const h = headers();
@@ -109,6 +114,20 @@ export default async function TenantReserve({
     const price = Number(pkg.price ?? 0) || 0;
     const label = catLabel(pkg.category as any);
 
+    // 효과일(meta.effectiveDate) 저장: 완료일 > 확정일 > 예약일
+    const metaOut: any = {
+      source: "reserve-page",
+      packageName: pkg.title,
+      packageCategory: String(pkg.category || ""),
+      packageCategoryLabel: label,
+      examType: label, // 엑셀 "검진유형"과 동일
+      totalKRW: price,
+      companySupportKRW: 0,
+      coPayKRW: price,
+    };
+    const eff = pickEffectiveDate({ date, meta: metaOut });
+    metaOut.effectiveDate = toYMD(eff);
+
     await prisma.booking.create({
       data: {
         hospitalId: tenantId,
@@ -119,16 +138,7 @@ export default async function TenantReserve({
         phone,
         phoneNormalized: phone.replace(/\D/g, ""),
         status: "CONFIRMED",
-        meta: {
-          source: "reserve-page",
-          packageName: pkg.title,
-          packageCategory: String(pkg.category || ""),
-          packageCategoryLabel: label,
-          examType: label, // 엑셀 "검진유형"과 동일
-          totalKRW: price,
-          companySupportKRW: 0,
-          coPayKRW: price,
-        },
+        meta: metaOut,
       },
     });
     revalidatePath(`/r/${tenantSlug}`);
