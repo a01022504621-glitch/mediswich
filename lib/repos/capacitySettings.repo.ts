@@ -53,8 +53,12 @@ function normSpecials(v: any): Specials {
 
 function normManaged(v: any): Managed {
   const b = (x: any) => (typeof x === "boolean" ? x : false);
-  const examsArr = Array.isArray(v?.exams) ? v.exams.map(String) : [];
-  const exams = Array.from(new Set(examsArr));
+  const examsArr: string[] = Array.isArray(v?.exams)
+    ? (v.exams as any[]).map((x) => String(x))
+    : [];
+  const exams: string[] = Array.from(new Set(examsArr))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   return {
     manageBasic: b(v?.manageBasic),
     manageEgd: b(v?.manageEgd),

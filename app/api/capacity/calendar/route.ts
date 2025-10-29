@@ -6,7 +6,7 @@ export const revalidate = 0;
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
 import { cookies, headers } from "next/headers";
-import { requireSession } from "@/lib/auth/guard";
+import { optionalSession } from "@/lib/auth/guard";
 import { resolveTenantHybrid } from "@/lib/tenant/resolve";
 
 type YMD = `${number}-${number}-${number}`;
@@ -90,7 +90,7 @@ async function resolveHospitalId(req: NextRequest): Promise<string | null> {
 
     let hidFromSession = "";
     try {
-      const session = await requireSession(false); // 공개에서도 실패 허용
+      const session = await optionalSession(); // 공개에서도 실패 허용
       hidFromSession = (session as any)?.hid || (session as any)?.hospitalId || "";
     } catch {
       // ignore
@@ -226,7 +226,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: e?.message || "INTERNAL" }, { status: 500 });
   }
 }
-
 
 
 
