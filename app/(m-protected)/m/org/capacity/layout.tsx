@@ -1,10 +1,10 @@
 // app/(m-protected)/m/org/capacity/layout.tsx
 import type { ReactNode } from "react";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 
 export default async function Layout({ children }: { children: ReactNode }) {
   // 병원 컨텍스트만 확보 (실제 화면은 children)
-  await requireOrg();
+  await requireSession();
 
   // 결제 붙이기 전까지는 PRO 게이팅 off
   const isPro = true;
@@ -16,4 +16,3 @@ export default async function Layout({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

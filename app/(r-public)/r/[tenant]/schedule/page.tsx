@@ -1,10 +1,10 @@
 // app/(r-public)/r/[tenant]/schedule/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-/* ---- util ---- */
+/* ================= util ================= */
 function cx(...xs: (string | false | null | undefined)[]) {
   return xs.filter(Boolean).join(" ");
 }
@@ -24,6 +24,7 @@ const STEPS = [
 ] as const;
 type StepKey = (typeof STEPS)[number]["key"];
 
+/* ===== Package/Exam types ===== */
 type PkgItem = {
   id?: string;
   code?: string;
@@ -49,18 +50,24 @@ type PackagePayload = {
   optionGroups: PackageGroup[];
 };
 
-/* 월 캘린더 상태: 사용자 기준으로 계산된 OPEN/CLOSED */
+/* ===== Capacity/Slots types ===== */
 type CapacityMonth = Record<string, "OPEN" | "CLOSED">;
 type Slot = { time: string; status: "OPEN" | "CLOSED" | "FULL" };
 
+/* ===== Add-on types ===== */
 type Addon = {
   id: string;
   name: string;
+  code?: string | null;
   price?: number | null;
   sex?: "M" | "F" | string | null;
   visible?: boolean;
 };
 
+/* ===== Exam catalog (이름→코드 매핑) ===== */
+type ExamCatalogMap = Record<string, string>; // key: normalized name, value: code
+
+/* ===== helpers ===== */
 const trimOrNull = (v: unknown) => (typeof v === "string" ? v.trim() || null : (v as any) ?? null);
 const rawItemKey = (x: PkgItem) =>
   (trimOrNull(x?.id) ?? trimOrNull(x?.code) ?? trimOrNull(x?.examId) ?? trimOrNull(x?.name)) as string | null;
@@ -69,6 +76,9 @@ const groupIdOf = (g: PackageGroup, idx: number) => {
   const cand = (trimOrNull(g?.id) ?? trimOrNull(g?.label)) as string | null;
   return cand && cand.length ? cand : `grp_${idx}`;
 };
+
+/* 이름 정규화: 모든 공백 제거 + 소문자 */
+const normName = (s: unknown) => String(s ?? "").replace(/\s+/g, "").toLowerCase();
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -80,12 +90,21 @@ function ymdKey(d: Date) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 function yyyymm(d: Date) {
-  return `${d.getFullYear()}-${d.getMonth() + 1}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 function addMonths(d: Date, n: number) {
   const r = new Date(d);
   r.setMonth(r.getMonth() + n);
   return r;
+}
+function noStoreUrl(url: string) {
+  try {
+    const u = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://local");
+    u.searchParams.set("_", String(Date.now()));
+    return u.toString().replace(u.origin, "");
+  } catch {
+    return url + (url.includes("?") ? "&" : "?") + "_=" + Date.now();
+  }
 }
 
 /* 성별 */
@@ -125,10 +144,12 @@ function buildCalendar(cursor: Date) {
   return cells;
 }
 
-/* 검사코드 유효성 */
-const isValidExamCode = (v: any) => /^[A-Za-z]{1,5}\d{2,6}$/i.test(String(v ?? "").trim());
+/* 검사코드 유효성: 영숫자 시작, 이후 영숫자/._- 허용, 1~32자 */
+const isValidExamCode = (v: any) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(String(v ?? "").trim());
 
-/* ---- Page ---- */
+/* ====================================================================== */
+/* Page */
+/* ====================================================================== */
 export default function Page({ params }: { params: { tenant: string } }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -141,6 +162,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
 
   const [pkg, setPkg] = useState<PackagePayload | null>(null);
   const [addons, setAddons] = useState<Addon[]>([]);
+  const [catalog, setCatalog] = useState<ExamCatalogMap>({});
   const [monthMap, setMonthMap] = useState<CapacityMonth>({});
   const [slots, setSlots] = useState<Slot[]>([]);
 
@@ -168,6 +190,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
 
   const t = (ko: string, en: string) => (form.foreigner ? en : ko);
 
+  /* ------- 데이터 로딩 ------- */
   useEffect(() => {
     if (!packageId) return;
     fetchPackage(params.tenant, packageId, corpCode).then(setPkg).catch(() => setPkg(null));
@@ -177,7 +200,11 @@ export default function Page({ params }: { params: { tenant: string } }) {
     fetchAddons(params.tenant).then(setAddons).catch(() => setAddons([]));
   }, [params.tenant]);
 
-  /* 사용자 필요 리소스 플래그 */
+  useEffect(() => {
+    fetchExamCatalog(params.tenant).then(setCatalog).catch(() => setCatalog({}));
+  }, [params.tenant]);
+
+  /* ------- 선택 내시경 여부 ------- */
   const endoscopyFlags = useMemo(() => {
     const { groups } = filteredGroups();
     const selectedKeys = form.examSelected || {};
@@ -195,22 +222,71 @@ export default function Page({ params }: { params: { tenant: string } }) {
     return { hasEGD, hasColo, any: hasEGD || hasColo };
   }, [form.examSelected, form.sex, pkg]);
 
-  /* 달력 상태 로딩: 표시 월 기준 + 사용자 리소스 반영 */
-  const loadMonth = (ym: string) =>
-    fetchCapacityMonthSmart(params.tenant, ym, { needEGD: endoscopyFlags.hasEGD, needCol: endoscopyFlags.hasColo })
-      .then(setMonthMap)
-      .catch(() => setMonthMap({}));
+  /* ------- 월/슬롯 ------- */
+  const monthAbortRef = useRef<AbortController | null>(null);
+  const slotsAbortRef = useRef<AbortController | null>(null);
+
+  const loadMonth = useCallback(
+    async (ym: string) => {
+      monthAbortRef.current?.abort();
+      const ctl = new AbortController();
+      monthAbortRef.current = ctl;
+      try {
+        const map = await fetchCapacityMonthSmart(
+          params.tenant,
+          ym,
+          { needEGD: endoscopyFlags.hasEGD, needCol: endoscopyFlags.hasColo },
+          ctl.signal
+        );
+        setMonthMap(map);
+      } catch (e: any) {
+        if (e?.name !== "AbortError") setMonthMap({});
+      }
+    },
+    [params.tenant, endoscopyFlags.hasEGD, endoscopyFlags.hasColo]
+  );
+
+  const loadSlots = useCallback(
+    async (dateKey: string) => {
+      slotsAbortRef.current?.abort();
+      const ctl = new AbortController();
+      slotsAbortRef.current = ctl;
+      try {
+        const s = await fetchSlots(params.tenant, dateKey, ctl.signal);
+        setSlots(s);
+      } catch (e: any) {
+        if (e?.name !== "AbortError") setSlots([]);
+      }
+    },
+    [params.tenant]
+  );
 
   useEffect(() => {
     if (stepKey !== "date") return;
     loadMonth(yyyymm(form.date));
-  }, [stepKey, params.tenant, form.date, endoscopyFlags.hasEGD, endoscopyFlags.hasColo]); // eslint-disable-line
+    loadSlots(ymdKey(form.date));
+  }, [stepKey, form.date, loadMonth, loadSlots]);
 
   useEffect(() => {
     if (stepKey !== "date") return;
-    fetchSlots(params.tenant, ymdKey(form.date)).then(setSlots);
-  }, [stepKey, params.tenant, form.date]);
+    const refresh = () => {
+      loadMonth(yyyymm(form.date));
+      loadSlots(ymdKey(form.date));
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [stepKey, form.date, loadMonth, loadSlots]);
 
+  /* ------- 입력 마스크 ------- */
   function setBirthMasked(v: string) {
     const digits = v.replace(/\D/g, "").slice(0, 7);
     const masked = digits.length <= 6 ? digits : `${digits.slice(0, 6)}-${digits.slice(6, 7)}`;
@@ -227,6 +303,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
     setForm((f: any) => ({ ...f, phone: out }));
   }
 
+  /* 성별 변경 시 선택 보정 */
   useEffect(() => {
     if (!pkg) return;
     const sex = form.sex as "" | "M" | "F";
@@ -245,10 +322,19 @@ export default function Page({ params }: { params: { tenant: string } }) {
     });
   }, [form.sex, pkg]); // eslint-disable-line
 
-  /* 가시 Add-on, 결제합계 */
+  /* 기본검사 이름 Set */
+  const basicNameSet = useMemo(() => {
+    const names = (pkg?.basicExams || []).map(normName);
+    return new Set(names.filter(Boolean));
+  }, [pkg]);
+
+  /* Add-on 가시/합계 */
   const visibleAddons = useMemo(
-    () => (addons || []).filter((a) => a.visible !== false && isItemAllowedBySex(a, form.sex as "" | "M" | "F")),
-    [addons, form.sex]
+    () =>
+      (addons || [])
+        .filter((a) => a.visible !== false && isItemAllowedBySex(a, form.sex as "" | "M" | "F"))
+        .filter((a) => !basicNameSet.has(normName(a.name))),
+    [addons, form.sex, basicNameSet]
   );
   const addonTotal = useMemo(
     () =>
@@ -259,6 +345,7 @@ export default function Page({ params }: { params: { tenant: string } }) {
   );
   const payToday = (Number(pkg?.price) || 0) + addonTotal;
 
+  /* 진행 가능 판단 */
   const canNext = useMemo(() => {
     const k = STEPS[stepIndex].key;
     if (k === "terms") return form.terms.privacy && form.terms.notify;
@@ -309,10 +396,15 @@ export default function Page({ params }: { params: { tenant: string } }) {
   async function submitBooking() {
     if (submitBusy) return;
     setSubmitBusy(true);
-    const payload = buildBookingPayload(params.tenant, packageId, pkg, form, {
-      corpCode: corpCode || undefined,
-      corpName: corpNameQ || undefined,
-    });
+    const payload = buildBookingPayload(
+      params.tenant,
+      packageId,
+      pkg,
+      form,
+      { corpCode: corpCode || undefined, corpName: corpNameQ || undefined },
+      visibleAddons,
+      catalog
+    );
     const r = await createBooking(payload);
     if (r.ok) {
       setShowSheet(false);
@@ -324,9 +416,11 @@ export default function Page({ params }: { params: { tenant: string } }) {
     }
   }
 
-  /* 상단 배너: 기업 코드/이름 */
   const showCorpBanner = Boolean(corpCode || corpNameQ);
 
+  /* ====================================================================== */
+  /* render */
+  /* ====================================================================== */
   return (
     <div className={cx("min-h-[100dvh]", tone.bg)}>
       <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/95 border-b border-slate-200">
@@ -384,6 +478,10 @@ export default function Page({ params }: { params: { tenant: string } }) {
             slots={slots}
             t={t}
             onMonthChange={(ym) => loadMonth(ym)}
+            onRefresh={() => {
+              loadMonth(yyyymm(form.date));
+              loadSlots(ymdKey(form.date));
+            }}
           />
         )}
       </main>
@@ -451,7 +549,9 @@ export default function Page({ params }: { params: { tenant: string } }) {
   );
 }
 
-/* ---- Stepper ---- */
+/* ====================================================================== */
+/* Stepper */
+/* ====================================================================== */
 function Stepper({ current, foreigner }: { current: number; foreigner: boolean }) {
   const pct = Math.round(((current + 1) / 4) * 100);
   return (
@@ -472,7 +572,9 @@ function Stepper({ current, foreigner }: { current: number; foreigner: boolean }
   );
 }
 
-/* ---- Terms ---- */
+/* ====================================================================== */
+/* Terms */
+/* ====================================================================== */
 function StepTerms({ form, setForm, t }: { form: any; setForm: any; t: (ko: string, en: string) => string }) {
   const { terms } = form;
   const set = (next: Partial<typeof terms>) => setForm((f: any) => ({ ...f, terms: { ...f.terms, ...next } }));
@@ -489,14 +591,14 @@ function StepTerms({ form, setForm, t }: { form: any; setForm: any; t: (ko: stri
       <Card>
         <label className="flex items-center gap-3 select-none p-3 rounded-2xl bg-slate-50 border border-slate-200">
           <input type="checkbox" checked={terms.all} onChange={(e) => toggleAll(e.target.checked)} className="size-5 rounded border-slate-300" />
-          <div className="text-[15px] font-semibold">{t("전체 동의합니다", "Agree to all")}</div>
+          <div className="text-[15px] font-semibold">전체 동의합니다</div>
         </label>
         <CheckRow
           checked={terms.privacy}
           onChange={(v) => set({ privacy: v })}
           label={
             <>
-              {t("개인정보 수집 및 이용 동의", "Personal data usage")} <b className="text-rose-500">({t("필수", "required")})</b>
+              개인정보 수집 및 이용 동의 <b className="text-rose-500">(필수)</b>
             </>
           }
           content={TERMS_PRIVACY}
@@ -506,7 +608,7 @@ function StepTerms({ form, setForm, t }: { form: any; setForm: any; t: (ko: stri
           onChange={(v) => set({ notify: v })}
           label={
             <>
-              {t("예약 관련 문자 수신", "SMS notifications")} <b className="text-rose-500">({t("필수", "required")})</b>
+              예약 관련 문자 수신 <b className="text-rose-500">(필수)</b>
             </>
           }
           content={TERMS_NOTIFY}
@@ -534,7 +636,9 @@ const TERMS_PRIVACY = `1. 개인정보 수집 및 이용 목적: 예약 관련 �
 * 제공 동의를 거부할 권리가 있으나, 거부 시 서비스 이용에 제한이 있을 수 있습니다.`;
 const TERMS_NOTIFY = `예약 관련 안내(SMS/LMS) 수신 동의. 거부 시 예약 서비스 제공에 제약이 있을 수 있습니다.`;
 
-/* ---- Info ---- */
+/* ====================================================================== */
+/* Info */
+/* ====================================================================== */
 function StepInfo({
   form,
   setForm,
@@ -552,7 +656,7 @@ function StepInfo({
     <section className="space-y-4">
       <Card>
         <div className="flex items-end justify-between gap-3">
-          <Field label={<LabelWithStar text={t("검진자명", "Full name")} required />}>
+          <Field label={<LabelWithStar text="검진자명" required />}>
             <input
               value={form.name}
               onChange={(e) =>
@@ -562,21 +666,21 @@ function StepInfo({
                 }))
               }
               className={inputClass}
-              placeholder={t("홍길동", "JOHN SMITH")}
+              placeholder="홍길동"
             />
           </Field>
           <label className="mb-3 inline-flex items-center gap-2 whitespace-nowrap">
             <input type="checkbox" checked={form.foreigner} onChange={(e) => setForm((f: any) => ({ ...f, foreigner: e.target.checked }))} className="h-4 w-4" />
-            <span className="text-sm text-slate-700">{t("외국인(EN)", "English")}</span>
+            <span className="text-sm text-slate-700">외국인(EN)</span>
           </label>
         </div>
 
-        <Field label={<LabelWithStar text={t("생년월일", "Birth (YYMMDD-#)")} required />}>
+        <Field label={<LabelWithStar text="생년월일 (YYMMDD-#)" required />}>
           <input value={form.birth7} onChange={(e) => setBirthMasked(e.target.value)} className={inputClass} inputMode="numeric" placeholder="YYMMDD-#" />
-          <p className="mt-1 text-[11px] text-slate-500">{t("예: 930715-1, 000101-2", "e.g. 930715-1")}</p>
+          <p className="mt-1 text-[11px] text-slate-500">예: 930715-1, 000101-2</p>
         </Field>
 
-        <Field label={<LabelWithStar text={t("핸드폰", "Mobile")} required />}>
+        <Field label={<LabelWithStar text="핸드폰" required />}>
           <input value={form.phone} onChange={(e) => setPhoneMasked(e.target.value)} className={inputClass} inputMode="numeric" placeholder="010-0000-0000" />
         </Field>
 
@@ -584,26 +688,26 @@ function StepInfo({
           <input value={form.email} onChange={(e) => setForm((f: any) => ({ ...f, email: e.target.value }))} className={inputClass} placeholder="example@email.com" />
         </Field>
 
-        <Field label={t("복용약", "Medication")}>
-          <input value={form.meds} onChange={(e) => setForm((f: any) => ({ ...f, meds: e.target.value }))} className={inputClass} placeholder={t("복용 중인 약이 있으면 입력", "List current medication")} />
+        <Field label="복용약">
+          <input value={form.meds} onChange={(e) => setForm((f: any) => ({ ...f, meds: e.target.value }))} className={inputClass} placeholder="복용 중인 약이 있으면 입력" />
         </Field>
-        <Field label={t("병력", "History")}>
-          <input value={form.disease} onChange={(e) => setForm((f: any) => ({ ...f, disease: e.target.value }))} className={inputClass} placeholder={t("병력 또는 수술력", "Medical history / surgery")} />
+        <Field label="병력">
+          <input value={form.disease} onChange={(e) => setForm((f: any) => ({ ...f, disease: e.target.value }))} className={inputClass} placeholder="병력 또는 수술력" />
         </Field>
 
-        <Field label={<LabelWithStar text={t("검진물품 배송지", "Shipping address")} required />}>
+        <Field label={<LabelWithStar text="검진물품 배송지" required />}>
           <div className="grid grid-cols-[1fr_auto] gap-2 mb-2">
-            <input value={form.postal} readOnly className={inputClass} placeholder={t("우편번호", "Postal code")} />
+            <input value={form.postal} readOnly className={inputClass} placeholder="우편번호" />
             <button type="button" className="px-3 rounded-xl border border-slate-200 inline-flex items-center gap-1.5 hover:bg-slate-50" onClick={openPostcode(setForm)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-slate-600">
                 <path d="M11 19a 8 8 0 1 1 5.292-14.01A8 8 0 0 1 11 19Zm10 2-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
-              <span className="text-sm">{t("주소검색", "Search")}</span>
+              <span className="text-sm">주소검색</span>
             </button>
           </div>
-          <input value={form.address1} readOnly className={cx(inputClass, "mb-2 bg-slate-50")} placeholder={t("주소", "Address")} />
-          <input value={form.address2} onChange={(e) => setForm((f: any) => ({ ...f, address2: e.target.value }))} className={inputClass} placeholder={t("상세주소", "Address line 2")} />
-          <p className="mt-1 text-xs text-slate-500">{t("기본주소는 “주소검색”으로만 입력됩니다.", "Base address is filled via search only.")}</p>
+          <input value={form.address1} readOnly className={cx(inputClass, "mb-2 bg-slate-50")} placeholder="주소" />
+          <input value={form.address2} onChange={(e) => setForm((f: any) => ({ ...f, address2: e.target.value }))} className={inputClass} placeholder="상세주소" />
+          <p className="mt-1 text-xs text-slate-500">기본주소는 “주소검색”으로만 입력됩니다.</p>
         </Field>
       </Card>
     </section>
@@ -618,7 +722,7 @@ function LabelWithStar({ text, required }: { text: string; required?: boolean })
   );
 }
 
-/* Postcode: 전체화면 레이어로 열기 */
+/* Postcode */
 function openPostcode(setForm: React.Dispatch<React.SetStateAction<any>>) {
   return async () => {
     await ensureDaumPostcode();
@@ -664,7 +768,9 @@ function ensureDaumPostcode() {
   });
 }
 
-/* ---- Exam ---- */
+/* ====================================================================== */
+/* Exam */
+/* ====================================================================== */
 function StepExam({
   form,
   setForm,
@@ -712,8 +818,6 @@ function StepExam({
       return { ...f, selectedAddons: Array.from(cur) };
     });
   }
-
-  const visibleAddons = addons;
 
   return (
     <section className="space-y-4">
@@ -862,7 +966,9 @@ function StepExam({
   );
 }
 
-/* ---- Date ---- */
+/* ====================================================================== */
+/* Date */
+/* ====================================================================== */
 function StepDate({
   form,
   setForm,
@@ -870,6 +976,7 @@ function StepDate({
   slots,
   t,
   onMonthChange,
+  onRefresh,
 }: {
   form: any;
   setForm: any;
@@ -877,36 +984,48 @@ function StepDate({
   slots: Slot[];
   t: (ko: string, en: string) => string;
   onMonthChange: (ym: string) => void;
+  onRefresh: () => void;
 }) {
   const [cursor, setCursor] = useState(new Date(form.date));
   const cal = useMemo(() => buildCalendar(cursor), [cursor]);
   const todayKey = ymdKey(new Date());
   const selectedKey = ymdKey(form.date);
 
-  /* 표시월이 바뀔 때마다 월 상태 재조회 */
   useEffect(() => {
-    onMonthChange(`${cursor.getFullYear()}-${cursor.getMonth() + 1}`);
-  }, [cursor]); // eslint-disable-line
+    onMonthChange(`${cursor.getFullYear()}-${pad2(cursor.getMonth() + 1)}`);
+  }, [cursor, onMonthChange]);
 
   return (
     <section className="space-y-4">
       <Card title={t("일자 선택", "Select a date")}>
-        <div className="text-[12px] text-slate-500 mb-2">{t("[가능] 날짜를 누르면 시간 선택이 활성화됩니다.", "Tap an OPEN date to choose time.")}</div>
         <div className="flex items-center justify-between mb-3">
           <button className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-50" onClick={() => setCursor(addMonths(cursor, -1))}>
-            {t("이전달", "Prev")}
+            이전달
           </button>
           <div className="text-sm font-semibold">
-            {cursor.getFullYear()} {t("년", "")} {cursor.getMonth() + 1}
-            {t("월", "")}
+            {cursor.getFullYear()} 년 {cursor.getMonth() + 1}월
           </div>
-          <button className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-50" onClick={() => setCursor(addMonths(cursor, 1))}>
-            {t("다음달", "Next")}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 hover:bg-slate-50"
+              onClick={() => setCursor(addMonths(cursor, 1))}
+            >
+              다음달
+            </button>
+            <button
+              className="px-3 py-1.5 text-sm rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              onClick={onRefresh}
+              title="관리자 변경 즉시 반영"
+            >
+              새로고침
+            </button>
+          </div>
         </div>
 
+        <div className="text-[12px] text-slate-500 mb-2">[가능] 날짜를 누르면 시간 선택이 활성화됩니다.</div>
+
         <div className="grid grid-cols-7 text-[11px] text-center text-slate-500 mb-1">
-          {(form.foreigner ? "SMTWTFS" : "일월화수목금토").split("").map((d: string) => (
+          {"일월화수목금토".split("").map((d: string) => (
             <div key={d} className="py-1">
               {d}
             </div>
@@ -933,7 +1052,7 @@ function StepDate({
             return (
               <button
                 key={i}
-                onClick={() => !disabled && setForm((f: any) => ({ ...f, date: d.date, time: "" }))}
+                onClick={() => !disabled && setForm((f: any) => ({ ...f, date: d.date, time: "" }))} // 시간 초기화
                 className={cx(
                   "aspect-square rounded-2xl border relative flex flex-col items-center justify-center transition",
                   "text-sm",
@@ -945,7 +1064,7 @@ function StepDate({
               >
                 <div className="text-[12px] mb-1 leading-none">{d.date.getDate()}</div>
                 <span className={cx("px-1.5 py-[2px] rounded-full text-[10px] border", clsBadge)}>
-                  {isSelected ? t("선택", "Picked") : status === "OPEN" ? t("가능", "OPEN") : t("마감", "CLOSED")}
+                  {isSelected ? "선택" : status === "OPEN" ? "가능" : "마감"}
                 </span>
               </button>
             );
@@ -977,14 +1096,16 @@ function StepDate({
             })}
           </div>
         ) : (
-          <div className="text-[13px] text-slate-500">{t("먼저 희망 일자를 선택하세요.", "Select a date first.")}</div>
+          <div className="text-[13px] text-slate-500">먼저 희망 일자를 선택하세요.</div>
         )}
       </Card>
     </section>
   );
 }
 
-/* ---- Card/Field/Row ---- */
+/* ====================================================================== */
+/* Card/Field/Row */
+/* ====================================================================== */
 function Card({ title, caption, children }: { title?: string; caption?: string; children: React.ReactNode }) {
   return (
     <section className={cx("rounded-3xl p-5 md:p-6 shadow-sm", tone.card, tone.line)}>
@@ -1019,30 +1140,36 @@ function Row({ k, v }: { k: string; v: string }) {
   );
 }
 
-/* ---- data fetch ---- */
+/* ====================================================================== */
+/* data fetch (no-cache + abort 지원) */
+/* ====================================================================== */
 async function fetchPackage(tenant: string, packageId: string, corpCode?: string): Promise<PackagePayload> {
-  const endpoints = [
-    `/api/public/${tenant}/package?` + new URLSearchParams({ id: packageId }).toString(),
-    `/api/public/${tenant}/package?` + new URLSearchParams({ packageId }).toString(),
-  ];
-  for (const u of endpoints) {
-    try {
-      const r = await fetch(u, { cache: "no-store", headers: { accept: "application/json" } });
-      if (r.ok) {
-        const j = await r.json();
-        return {
-          id: j.id,
-          name: j.name ?? j.title ?? "",
-          title: j.title,
-          price: j.price ?? j.priceKRW ?? null,
-          basicExams: j.basicExams ?? j.baseExams ?? [],
-          optionGroups: j.optionGroups ?? [],
-        };
-      }
-    } catch {}
-  }
-  const urls = [`/api/public/${tenant}/packages?cat=general`, corpCode ? `/api/public/${tenant}/packages?cat=corp&code=${corpCode}` : null].filter(Boolean) as string[];
-  const lists = await Promise.all(urls.map((u) => fetch(u, { cache: "no-store", headers: { accept: "application/json" } }).then((r) => (r.ok ? r.json() : []))));
+  const u = `/api/public/${tenant}/package?` + new URLSearchParams({ id: packageId }).toString();
+  try {
+    const r = await fetch(noStoreUrl(u), { cache: "no-store", headers: { accept: "application/json" } });
+    if (r.ok) {
+      const j = await r.json();
+      return {
+        id: j.id,
+        name: j.name ?? j.title ?? "",
+        title: j.title,
+        price: j.price ?? j.priceKRW ?? null,
+        basicExams: j.basicExams ?? j.baseExams ?? [],
+        optionGroups: j.optionGroups ?? [],
+      };
+    }
+  } catch {}
+  const urls = [
+    `/api/public/${tenant}/packages?cat=general`,
+    corpCode ? `/api/public/${tenant}/packages?cat=corp&code=${encodeURIComponent(corpCode)}` : null,
+  ].filter(Boolean) as string[];
+  const lists = await Promise.all(
+    urls.map((u) =>
+      fetch(noStoreUrl(u), { cache: "no-store", headers: { accept: "application/json" } })
+        .then((r) => (r.ok ? r.json() : []))
+        .catch(() => [])
+    )
+  );
   const item = lists.flat().find((x: any) => x.id === packageId);
   if (!item) throw new Error("package not found");
   return {
@@ -1054,9 +1181,10 @@ async function fetchPackage(tenant: string, packageId: string, corpCode?: string
     optionGroups: item.optionGroups ?? [],
   };
 }
+
 async function fetchAddons(tenant: string): Promise<Addon[]> {
   try {
-    const r = await fetch(`/api/public/${tenant}/addons`, { cache: "no-store", headers: { accept: "application/json" } });
+    const r = await fetch(noStoreUrl(`/api/public/${tenant}/addons`), { cache: "no-store", headers: { accept: "application/json" } });
     if (!r.ok) return [];
     const j = await r.json();
     const arr: any[] = Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : [];
@@ -1065,6 +1193,7 @@ async function fetchAddons(tenant: string): Promise<Addon[]> {
       .map((x) => ({
         id: x.id || x.code || x.examId || String(Math.random()),
         name: x.name || "",
+        code: typeof x.code === "string" ? x.code.trim() : null,
         price: x.price ?? x.priceKRW ?? null,
         sex: x.sex ?? x.gender ?? x.sexNormalized ?? null,
         visible: x.visible !== false,
@@ -1074,13 +1203,34 @@ async function fetchAddons(tenant: string): Promise<Addon[]> {
   }
 }
 
-/* 사용자 기준 월 상태 조회:
-   - 기본만 필요하면 month 엔드포인트 사용
-   - 내시경(egd/col) 포함 시 상세(from/to/resources)로 계산 */
+/* 검사 카탈로그: 이름→코드 */
+async function fetchExamCatalog(tenant: string): Promise<ExamCatalogMap> {
+  // 우선 /catalog/exams 시도, 실패 시 /exams 폴백
+  const tryUrls = [`/api/public/${tenant}/catalog/exams`, `/api/public/${tenant}/exams`];
+  for (const u of tryUrls) {
+    try {
+      const r = await fetch(noStoreUrl(u), { cache: "no-store", headers: { accept: "application/json" } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const arr: Array<{ name?: string; code?: string }> = Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : [];
+      const map: ExamCatalogMap = {};
+      for (const x of arr) {
+        const nameKey = normName(x?.name);
+        const code = (x?.code || "").trim();
+        if (nameKey && isValidExamCode(code)) map[nameKey] = code;
+      }
+      if (Object.keys(map).length > 0) return map;
+    } catch {}
+  }
+  return {};
+}
+
+/* 사용자 기준 월 상태 조회 */
 async function fetchCapacityMonthSmart(
   tenant: string,
   ym: string,
-  flags: { needEGD: boolean; needCol: boolean }
+  flags: { needEGD: boolean; needCol: boolean },
+  signal?: AbortSignal
 ): Promise<CapacityMonth> {
   const [yStr, mStr] = ym.split("-");
   const y = Number(yStr);
@@ -1089,44 +1239,40 @@ async function fetchCapacityMonthSmart(
   const from = `${yStr}-${pad2(m)}-01`;
   const to = `${yStr}-${pad2(m)}-${pad2(last)}`;
 
-  // 기본만 필요한 경우: 단순 month API 사용
   if (!flags.needEGD && !flags.needCol) {
-    const res = await fetch(`/api/public/${tenant}/capacity?month=${y}-${m}`, { cache: "no-store", headers: { accept: "application/json" } });
+    const url = noStoreUrl(`/api/public/${tenant}/capacity?month=${yStr}-${pad2(m)}`);
+    const res = await fetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal });
     if (!res.ok) throw new Error("capacity error");
     const j = await res.json();
     const raw: any = j?.days ?? j;
     const out: CapacityMonth = {};
-    for (const [k, v] of Object.entries(raw || {})) out[k] = (String(v).toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN");
+    for (const [k, v] of Object.entries(raw || {})) out[k] = String(v).toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN";
     return out;
   }
 
-  // 특수 필요 시: 상세 API로 basic + 특수 마감 병합
   const resKeys = ["basic"].concat(flags.needEGD ? ["egd"] : []).concat(flags.needCol ? ["col"] : []);
   const url = `/api/public/${tenant}/capacity?` + new URLSearchParams({ from, to, resources: resKeys.join(",") }).toString();
-  const r = await fetch(url, { cache: "no-store", headers: { accept: "application/json" } });
+  const r = await fetch(noStoreUrl(url), { cache: "no-store", headers: { accept: "application/json" }, signal });
   if (!r.ok) throw new Error("capacity detail error");
   const jd = await r.json();
-  const days = (jd?.days || {}) as Record<
-    string,
-    Partial<Record<string, { cap: number; used: number; closed?: boolean }>>
-  >;
+  const days = (jd?.days || {}) as Record<string, Partial<Record<string, { cap: number; used: number; closed?: boolean }>>>;
   const out: CapacityMonth = {};
   for (const k of Object.keys(days)) {
     const d = days[k] || {};
-    const basicClosed = Boolean(d.basic?.closed);
-    const egdClosed = Boolean(d.egd?.closed);
-    const colClosed = Boolean(d.col?.closed) || Boolean((d as any).cscope?.closed);
+    const basicClosed = Boolean((d as any).basic?.closed);
+    const egdClosed = Boolean((d as any).egd?.closed);
+    const colClosed = Boolean((d as any).col?.closed) || Boolean((d as any).cscope?.closed);
     const closed = basicClosed || (flags.needEGD && egdClosed) || (flags.needCol && colClosed);
     out[k] = closed ? "CLOSED" : "OPEN";
   }
   return out;
 }
 
-async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
-  const urls = [`/api/public/${tenant}/timeslots?date=${ymd}`, `/api/public/${tenant}/slots?date=${ymd}`, `/api/public/${tenant}/capacity?date=${ymd}`];
+async function fetchSlots(tenant: string, ymd: string, signal?: AbortSignal): Promise<Slot[]> {
+  const urls = [`/api/public/${tenant}/timeslots?date=${ymd}`, `/api/public/${tenant}/capacity?date=${ymd}`];
   for (const u of urls) {
     try {
-      const r = await fetch(u, { cache: "no-store", headers: { accept: "application/json" } });
+      const r = await fetch(noStoreUrl(u), { cache: "no-store", headers: { accept: "application/json" }, signal });
       if (!r.ok) continue;
       const j = await r.json();
       const raw: any[] = Array.isArray(j?.slots) ? j.slots : Array.isArray(j?.times) ? j.times : Array.isArray(j) ? j : [];
@@ -1141,7 +1287,9 @@ async function fetchSlots(tenant: string, ymd: string): Promise<Slot[]> {
         mapped.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
         return mapped;
       }
-    } catch {}
+    } catch (e: any) {
+      if (e?.name === "AbortError") return [];
+    }
   }
   return generateSlots();
 }
@@ -1154,6 +1302,7 @@ function generateSlots(): Slot[] {
   }
   return out;
 }
+
 function makeIdemKey() {
   const g: any = globalThis as any;
   if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
@@ -1162,7 +1311,7 @@ function makeIdemKey() {
 async function createBooking(payload: any): Promise<{ ok: boolean; msg?: string }> {
   try {
     const key = makeIdemKey();
-    const res = await fetch(`/api/public/${payload.tenant}/booking`, {
+    const res = await fetch(noStoreUrl(`/api/public/${payload.tenant}/booking`), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1185,13 +1334,24 @@ async function createBooking(payload: any): Promise<{ ok: boolean; msg?: string 
   }
 }
 
-/* buildBookingPayload */
+/* 이름→코드 조회 유틸 */
+function codeByName(catalog: ExamCatalogMap, name?: string | null, fallback?: string | null) {
+  const fromItem = (fallback || "").trim();
+  if (isValidExamCode(fromItem)) return fromItem;
+  const key = normName(name);
+  const fromCatalog = (catalog[key] || "").trim();
+  return isValidExamCode(fromCatalog) ? fromCatalog : "";
+}
+
+/* buildBookingPayload: 코드 합성 */
 function buildBookingPayload(
   tenant: string,
   packageId: string,
   pkg: PackagePayload | null,
   form: any,
-  corp?: { corpCode?: string; corpName?: string }
+  corp?: { corpCode?: string; corpName?: string },
+  addonsCatalog?: Array<{ id: string; name: string; code?: string | null; price?: number | null }>,
+  catalogMap: ExamCatalogMap = {}
 ) {
   const groupsSnap = (pkg?.optionGroups || []).map((g, gi) => {
     const gid = groupIdOf(g, gi);
@@ -1200,7 +1360,7 @@ function buildBookingPayload(
       .map((it, xi) => ({
         key: itemKeyFrom(it, xi),
         name: it?.name || "",
-        code: typeof (it as any)?.code === "string" ? String((it as any).code).trim() : "",
+        code: codeByName(catalogMap, it?.name, (it as any)?.code),
       }))
       .filter((x) => picked.has(x.key))
       .map((x) => ({ name: x.name, code: x.code }));
@@ -1211,9 +1371,31 @@ function buildBookingPayload(
   const selectedA = labelJoin(/A/i);
   const selectedB = labelJoin(/B/i);
 
-  const examCodes = groupsSnap.flatMap((g) => g.selected.map((s) => s.code)).filter(isValidExamCode).join(",");
+  type AddonObj = { id: string; name: string; code: string; price: number };
+  const addonObjects: AddonObj[] =
+    (form?.selectedAddons || []).map((id: string) => {
+      const found = (addonsCatalog || []).find((a) => a.id === id);
+      return {
+        id,
+        name: (found?.name || id) as string,
+        code: codeByName(catalogMap, found?.name, found?.code || null),
+        price: Number(found?.price ?? 0) || 0,
+      };
+    }) ?? [];
 
-  const coPayKRW = Number(pkg?.price) || 0;
+  const basicCodes = (pkg?.basicExams || [])
+    .map((nm) => codeByName(catalogMap, nm, null))
+    .filter(isValidExamCode);
+
+  const codesFromGroups = groupsSnap.flatMap((g) => g.selected.map((s) => s.code)).filter(isValidExamCode);
+  const codesFromAddons = addonObjects.map((a) => a.code).filter(isValidExamCode);
+
+  const examCodes = Array.from(new Set([...basicCodes, ...codesFromGroups, ...codesFromAddons]));
+  const examCodesStr = examCodes.join(",");
+
+  const basePrice = Number(pkg?.price) || 0;
+  const addonKRW = addonObjects.reduce((s: number, a: AddonObj) => s + a.price, 0);
+  const coPayKRW = basePrice + addonKRW;
 
   return {
     tenant,
@@ -1228,14 +1410,39 @@ function buildBookingPayload(
     meds: form.meds,
     disease: form.disease,
     address: { postal: form.postal, address1: form.address1, address2: form.address2 },
+
     exams: { basic: pkg?.basicExams || [], optional: form.examSelected || {} },
-    examSnapshot: { groups: groupsSnap, selectedA, selectedB, examCodes, addons: form.selectedAddons || [] },
+
+    examSnapshot: {
+      groups: groupsSnap,
+      selectedA,
+      selectedB,
+      examCodes: examCodesStr,
+      addonCodes: addonObjects.map((a) => a.code).filter(isValidExamCode),
+      addons: addonObjects.map((a) => a.name),
+      addonIds: (form?.selectedAddons || []),
+    },
+
+    meta: {
+      corpCode: corp?.corpCode || "",
+      corpName: corp?.corpName || "",
+      addons: addonObjects,
+      priceBaseKRW: basePrice,
+      coPayAddonsKRW: addonKRW,
+      coPayKRW,
+      totalKRW: coPayKRW,
+      examCodes: examCodesStr, // 백업 저장
+    },
+
     coPayKRW,
+    totalKRW: coPayKRW,
     datetime: `${ymdKey(form.date)} ${form.time}`,
     status: "PENDING",
     survey: form.survey || {},
-    meta: { corpCode: corp?.corpCode || "", corpName: corp?.corpName || "" },
   };
 }
+
+
+
 
 

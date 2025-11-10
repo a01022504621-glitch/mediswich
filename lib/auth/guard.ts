@@ -25,7 +25,7 @@ export type Session = JwtPayload & {
   hid?: string; // alias
 };
 
-// ALS 컨텍스트 주입 헬퍼 (enterTenant/setTenant 둘 다 지원)
+// ALS 컨텍스트 주입 헬퍼 (enterTenant/setTenant/runWithTenant 모두 지원)
 async function primeTenantContext(payload: Session) {
   try {
     const als = await import("@/lib/tenant/als");
@@ -36,16 +36,16 @@ async function primeTenantContext(payload: Session) {
       role: payload.role,
     };
     if (!ctx.hospitalId) return;
-    if (typeof (als as any).enterTenant === "function") {
-      (als as any).enterTenant(ctx);
-    } else if (typeof (als as any).setTenant === "function") {
-      (als as any).setTenant(ctx);
-    } else if (als && typeof (als as any).runWithTenant === "function") {
-      // 최후의 수단: 동기 enter가 없으면 run으로 감싸기 (호출자 직후에만 유효)
-      (als as any).runWithTenant(ctx, () => {});
+    const anyAls = als as any;
+    if (typeof anyAls.enterTenant === "function") {
+      anyAls.enterTenant(ctx);
+    } else if (typeof anyAls.setTenant === "function") {
+      anyAls.setTenant(ctx);
+    } else if (typeof anyAls.runWithTenant === "function") {
+      anyAls.runWithTenant(ctx, () => {});
     }
   } catch {
-    // ALS 미존재 시 무시 (프리스마 미들웨어가 없으면 스코프 미적용)
+    // ALS 미존재 시 무시
   }
 }
 
@@ -56,7 +56,6 @@ export async function optionalSession(): Promise<Session | null> {
   try {
     const payload = (await verifyJwt(token)) as Session;
     if (payload?.hospitalId && !payload.hid) payload.hid = payload.hospitalId;
-    // ALS priming
     await primeTenantContext(payload);
     return payload;
   } catch {
@@ -77,16 +76,14 @@ export async function requireSession(opts?: { next?: string }) {
     const payload = (await verifyJwt(token)) as Session;
     if (!payload?.sub) throw new Error("Invalid session");
     if (payload.hospitalId && !payload.hid) payload.hid = payload.hospitalId;
-
-    // ALS priming: 이후의 Prisma 쿼리에 병원 스코프 자동 적용
     await primeTenantContext(payload);
-
     return payload;
   } catch {
     redirect(loginUrl);
   }
 }
 
+// 권한 체크
 export function assertRole(s: Session, roles: string[] | readonly string[]) {
   if (!s?.role || !roles.includes(s.role)) {
     throw new Error("FORBIDDEN");

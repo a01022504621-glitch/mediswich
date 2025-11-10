@@ -1,10 +1,11 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 // app/api/org/domains/request-verify/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 import crypto from "crypto";
 
 /**
@@ -21,25 +22,27 @@ function nameFor(host: string) {
 }
 
 export async function POST(req: Request) {
-  const org = await requireOrg();
-  const { host } = await req.json().catch(() => ({ host: "" as string }));
+  const s = await requireSession();
+  const hid = String((s as any).hid || (s as any).hospitalId || "");
 
+  const { host } = await req.json().catch(() => ({ host: "" as string }));
   const clean = String(host || "").trim().toLowerCase();
   if (!clean || !clean.includes(".")) {
     return NextResponse.json({ ok: false, error: "invalid host" }, { status: 400 });
   }
 
   const exists = await prisma.hospitalDomain.findUnique({ where: { host: clean } });
-  if (exists && exists.hospitalId !== org.id) {
+  if (exists && exists.hospitalId !== hid) {
     return NextResponse.json({ ok: false, error: "host used by another hospital" }, { status: 409 });
   }
   if (!exists) {
-    await prisma.hospitalDomain.create({ data: { hospitalId: org.id, host: clean } });
+    await prisma.hospitalDomain.create({ data: { hospitalId: hid, host: clean } });
   }
 
-  const token = tokenFor(clean, org.id);
+  const token = tokenFor(clean, hid);
   const name = nameFor(clean);
   return NextResponse.json({ ok: true, host: clean, txtName: name, txtValue: token });
 }
+
 
 

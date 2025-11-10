@@ -1,16 +1,30 @@
+// app/api/m/addons/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// app/api/m/addons/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma, { runAs } from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth/guard";
 
 type SexIn = "A" | "M" | "F";
-type AddonDTO = { id?: string; name: string; sex: SexIn; price: number | null; visible: boolean; clientId: string | null };
+type AddonDTO = {
+  id?: string;
+  name: string;
+  sex: SexIn;
+  code?: string | null;              // ← 추가: 코드 필드
+  price: number | null;
+  visible: boolean;
+  clientId: string | null;
+};
 
 const toSexOut = (s: "M" | "F" | null): SexIn => (s === "M" || s === "F" ? s : "A");
 const fromSexIn = (s: SexIn): "M" | "F" | null => (s === "A" ? null : s);
+
+const normCode = (c: any) => {
+  const v = typeof c === "string" ? c.trim() : "";
+  return v.length ? v : null;
+};
 
 /** 목록 조회 */
 export async function GET(req: NextRequest) {
@@ -40,6 +54,7 @@ export async function GET(req: NextRequest) {
           id: r.id,
           name: r.name,
           sex: toSexOut(r.sex),
+          code: r.code ?? null,            // ← 추가
           price,
           visible,
           clientId,
@@ -58,6 +73,7 @@ export async function GET(req: NextRequest) {
       id: r.id,
       name: r.name,
       sex: toSexOut(r.sex),
+      code: r.code ?? null,               // ← 추가
       price: r.priceKRW ?? null,
       visible: r.isActive ?? true,
       clientId: null,
@@ -83,6 +99,7 @@ export async function POST(req: NextRequest) {
     const price = typeof body.price === "number" ? Math.max(0, Math.trunc(body.price)) : null;
     const visible = typeof body.visible === "boolean" ? body.visible : true;
     const clientId = typeof body.clientId === "string" && body.clientId ? body.clientId : null;
+    const codeIn = normCode(body.code);
 
     if (body.id) {
       const base = await prisma.addonItem.findFirst({ where: { id: body.id, hospitalId: hid } });
@@ -93,6 +110,7 @@ export async function POST(req: NextRequest) {
         data: {
           name,
           sex: fromSexIn(sexIn),
+          code: codeIn,                  // ← 추가
           isActive: visible,
           ...(price != null ? { priceKRW: price } : {}), // null이면 필드 생략
         },
@@ -107,7 +125,12 @@ export async function POST(req: NextRequest) {
       }
 
       await prisma.auditLog.create({
-        data: { hospitalId: hid, userId: s.sub ?? null, action: "UPSERT_ADDON", meta: { id: base.id, clientId } },
+        data: {
+          hospitalId: hid,
+          userId: s.sub ?? null,
+          action: "UPSERT_ADDON",
+          meta: { id: base.id, clientId, code: codeIn ?? undefined },
+        },
       });
 
       return NextResponse.json({ ok: true, id: base.id });
@@ -118,6 +141,7 @@ export async function POST(req: NextRequest) {
         hospitalId: hid,
         name,
         sex: fromSexIn(sexIn),
+        code: codeIn,                    // ← 추가
         isActive: visible,
         ...(price != null ? { priceKRW: price } : {}), // 기본값 유지
       },
@@ -132,7 +156,12 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.auditLog.create({
-      data: { hospitalId: hid, userId: s.sub ?? null, action: "CREATE_ADDON", meta: { id: created.id, clientId } },
+      data: {
+        hospitalId: hid,
+        userId: s.sub ?? null,
+        action: "CREATE_ADDON",
+        meta: { id: created.id, clientId, code: codeIn ?? undefined },
+      },
     });
 
     return NextResponse.json({ ok: true, id: created.id });

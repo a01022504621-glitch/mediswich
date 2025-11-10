@@ -13,11 +13,11 @@ import {
 import {
   loadCodes,
   saveCodes,
-  loadPackages,
   savePackages,
   publishPackages,
   ensureHospitalScope,
   loadPackagesDBFirst,
+  clearLocal,
 } from "@/lib/examStore";
 
 /* ===== Types ===== */
@@ -61,6 +61,9 @@ const btn = "px-3 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-5
 const btnPrimary = "px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:opacity-90";
 
 /* ===== Small Utils ===== */
+const clone = <T,>(v: T): T =>
+  typeof structuredClone === "function" ? structuredClone(v) : JSON.parse(JSON.stringify(v));
+
 function stableId(category: string, detail: string, name: string) {
   const key = [category, detail, name].map((s) => (s || "").trim().toLowerCase()).join("|");
   let h = 2166136261 >>> 0;
@@ -77,6 +80,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 500) {
     t = setTimeout(() => fn(...args), ms);
   };
 }
+const safeArr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : []);
 
 /* ===== Excel Loader ===== */
 async function loadExcel(): Promise<Exam[]> {
@@ -95,103 +99,24 @@ async function loadExcel(): Promise<Exam[]> {
     if (!category || !name) return null;
     return { id: stableId(category, detail, name), category, detail, name };
   };
+
   return rows.map(toExam).filter(Boolean) as Exam[];
 }
 
-/* ===== Packages Grid ===== */
-function PackagesGrid({
-  items,
-  onAdd,
-  onEdit,
-  onClone,
-  onDelete,
-  onToggleShow,
-}: {
-  items: DraftPackage[];
-  onAdd: () => void;
-  onEdit: (id: string) => void;
-  onClone: (id: string) => void;
-  onDelete: (id: string) => void;
-  onToggleShow: (id: string, v: boolean) => void;
-}) {
-  return (
-    <section className={card}>
-      <div className={subHead}>등록된 패키지</div>
-      <div className={body}>
-        <div className="mb-4 flex items-center justify-between">
-          <button className={btnPrimary} onClick={onAdd}>
-            패키지 추가
-          </button>
-        </div>
-        {items.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">아직 등록된 패키지가 없습니다.</div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {items.map((p) => {
-              const baseCount = p.groups.base?.length || 0;
-              const optIds = Object.keys(p.groupMeta).filter((id) => id !== "base");
-              const optionGroups = optIds.length;
-              const chooseSum = optIds.reduce(
-                (a, id) => a + (Number(p.groupMeta[id]?.chooseCount) || 0),
-                0
-              );
-              return (
-                <div key={p.id} className="rounded-xl border p-4 shadow-sm flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="text-base font-semibold truncate">{p.name}</div>
-                    <span
-                      className={clsx(
-                        "text-xs px-2 py-0.5 rounded-full border",
-                        p.showInBooking
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-50 text-gray-600 border-gray-200"
-                      )}
-                    >
-                      {p.showInBooking ? "예약자 노출" : "미노출"}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {p.from || "-"} ~ {p.to || "-"}
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-md">기본 {baseCount}</span>
-                    <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">선택묶음 {optionGroups}</span>
-                    <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">필수합 {chooseSum}</span>
-                    <span className="ml-auto font-medium">{(p.price || 0).toLocaleString()}원</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="accent-sky-600 scale-110"
-                        checked={p.showInBooking}
-                        onChange={(e) => onToggleShow(p.id, e.target.checked)}
-                      />
-                      예약자페이지 노출
-                    </label>
-                    <div className="flex gap-2">
-                      <button className={btn} onClick={() => onEdit(p.id)}>
-                        수정
-                      </button>
-                      <button className={btn} onClick={() => onClone(p.id)}>
-                        복제
-                      </button>
-                      <button
-                        className="px-3 py-2 rounded-lg text-sm border border-red-300 text-red-600 hover:bg-red-50"
-                        onClick={() => onDelete(p.id)}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </section>
-  );
+/* ===== Draft 표준화 ===== */
+function ensureBase(p: DraftPackage): DraftPackage {
+  const next = clone(p);
+  if (!next.groups) next.groups = {};
+  if (!Array.isArray(next.groups.base)) next.groups.base = [];
+  if (!next.groupMeta) next.groupMeta = {} as any;
+  if (!next.groupMeta.base)
+    next.groupMeta.base = { id: "base", label: "기본검사", color: "sky", chooseCount: 0 };
+  if (!Array.isArray(next.groupOrder)) next.groupOrder = ["base"];
+  if (!next.groupOrder.includes("base")) next.groupOrder.unshift("base");
+  if (!Array.isArray(next.addons)) next.addons = [];
+  if (typeof next.showInBooking !== "boolean") next.showInBooking = true;
+  if (typeof next.price !== "number") next.price = Number(next.price) || 0;
+  return next;
 }
 
 /* ===== Page ===== */
@@ -201,11 +126,28 @@ export default function GeneralPackagesPage() {
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [excelErr, setExcelErr] = useState<string | null>(null);
-  const [codes, setCodes] = useState<Record<string, string>>({});
-  const [isPending, startTransition] = useTransition();
 
-  // codes 디바운스 저장
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const [overrideMap, setOverrideMap] = useState<Record<string, { code?: string; sex?: Sex }>>({});
+  const [, startTransition] = useTransition();
+
+  // 단일 변이 락
+  const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const withLock = useCallback(async (fn: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }, []);
+
   const saveCodesDebounced = useMemo(() => debounce(saveCodes, 500), []);
+
   const setCode = useCallback(
     (examId: string, code: string) => {
       setCodes((prev) => {
@@ -213,6 +155,8 @@ export default function GeneralPackagesPage() {
         saveCodesDebounced(next);
         return next;
       });
+
+      // 빌더 영역에 코드 동기 반영
       startTransition(() => {
         setDraft((prev) => {
           const groups = { ...prev.groups };
@@ -230,9 +174,10 @@ export default function GeneralPackagesPage() {
         });
       });
     },
-    [saveCodesDebounced]
+    [saveCodesDebounced, startTransition],
   );
 
+  // 초기 로드
   useEffect(() => {
     setCodes(loadCodes());
     loadExcel()
@@ -241,22 +186,45 @@ export default function GeneralPackagesPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // 서버 오버라이드 로드 → 코드맵과 병합
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/m/exams/overrides", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = await r.json().catch(() => null as any);
+        const map = (j?.map || {}) as Record<string, { code?: string; sex?: Sex }>;
+        setOverrideMap(map);
+
+        const merged = { ...loadCodes() };
+        for (const [k, v] of Object.entries(map)) {
+          if (v?.code) merged[k] = v.code;
+        }
+        setCodes(merged);
+        saveCodesDebounced(merged);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [saveCodesDebounced]);
+
   // 신규 드래프트
-  const makeBlank = (): DraftPackage => ({
-    id: `pkg_${Date.now()}`,
-    name: "종합검진 패키지(예시)",
-    from: "",
-    to: "",
-    price: 0,
-    groups: { base: [], opt_A: [] },
-    groupOrder: ["base", "opt_A"],
-    groupMeta: {
-      base: { id: "base", label: "기본검사", color: "sky" },
-      opt_A: { id: "opt_A", label: "선택검사 A", color: "slate", chooseCount: 1 },
-    },
-    addons: [],
-    showInBooking: true,
-  });
+  const makeBlank = (): DraftPackage =>
+    ensureBase({
+      id: (crypto as any)?.randomUUID?.() ?? `pkg_${Math.random().toString(36).slice(2)}`,
+      name: "종합검진 패키지(예시)",
+      from: "",
+      to: "",
+      price: 0,
+      groups: { base: [], opt_A: [] },
+      groupOrder: ["base", "opt_A"],
+      groupMeta: {
+        base: { id: "base", label: "기본검사", color: "sky", chooseCount: 0 },
+        opt_A: { id: "opt_A", label: "선택검사 A", color: "slate", chooseCount: 1 },
+      },
+      addons: [],
+      showInBooking: true,
+    });
 
   // DB 우선 로드
   const [packages, setPackages] = useState<DraftPackage[]>([]);
@@ -266,9 +234,10 @@ export default function GeneralPackagesPage() {
       await ensureHospitalScope();
       const list = (await loadPackagesDBFirst(NS)) as DraftPackage[];
       if (!alive) return;
-      setPackages(list);
-      // 보조 캐시 갱신
-      savePackages(NS, list);
+      const norm = safeArr<DraftPackage>(list).map(ensureBase);
+      setPackages(norm);
+      if (norm.length === 0) clearLocal(NS);
+      else savePackages(NS, norm);
     })();
     return () => {
       alive = false;
@@ -277,42 +246,46 @@ export default function GeneralPackagesPage() {
 
   const refreshFromDB = useCallback(async () => {
     const list = (await loadPackagesDBFirst(NS)) as DraftPackage[];
-    setPackages(list);
-    savePackages(NS, list);
+    const norm = safeArr<DraftPackage>(list).map(ensureBase);
+    setPackages(norm);
+    if (norm.length === 0) clearLocal(NS);
+    else savePackages(NS, norm);
   }, []);
 
   const saveList = (next: DraftPackage[]) => {
-    setPackages(next);
-    // 로컬 캐시(보조)
-    savePackages(NS, next);
+    const norm = safeArr<DraftPackage>(next).map(ensureBase);
+    setPackages(norm);
+    if (norm.length === 0) clearLocal(NS);
+    else savePackages(NS, norm);
   };
 
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [draft, setDraft] = useState<DraftPackage>(makeBlank());
 
-  // 좌측 목록 필터
+  /* 좌측 목록 필터 */
   const categories = useMemo(
     () => ["전체", ...Array.from(new Set(allExams.map((e) => e.category).filter(Boolean)))],
-    [allExams]
+    [allExams],
   );
   const [cat, setCat] = useState("전체");
   const [q, setQ] = useState("");
   const dq = useDeferredValue(q);
+
   const filtered = useMemo(() => {
     const s = dq.trim().toLowerCase();
     return allExams.filter(
       (e) =>
         (cat === "전체" || e.category === cat) &&
-        (!s || e.name.toLowerCase().includes(s) || e.detail.toLowerCase().includes(s))
+        (!s || e.name.toLowerCase().includes(s) || e.detail.toLowerCase().includes(s)),
     );
   }, [allExams, cat, dq]);
 
+  /* 빌더 상태 */
   const [activeGroup, setActiveGroup] = useState<GroupId>("base");
   const [activeTab, setActiveTab] = useState<"builder" | "addons">("builder");
   const meta = (gid: GroupId) => draft.groupMeta[gid];
-  const count = (gid: GroupId) => draft.groups[gid]?.length || 0;
+  const count = (gid: GroupId) => safeArr<GroupRow>(draft.groups[gid]).length;
 
-  /** 옵션 그룹 아이디 생성(A~Z) */
   function nextOptId() {
     const used = new Set([
       ...draft.groupOrder.filter((id) => id.startsWith("opt_")).map((id) => id.replace("opt_", "")),
@@ -329,15 +302,17 @@ export default function GeneralPackagesPage() {
   const addGroup = () => {
     const id = nextOptId();
     if (draft.groupOrder.includes(id) || draft.groupMeta[id]) return;
-    setDraft((prev) => ({
-      ...prev,
-      groupOrder: [...prev.groupOrder, id],
-      groups: { ...prev.groups, [id]: [] },
-      groupMeta: {
-        ...prev.groupMeta,
-        [id]: { id, label: `선택검사 ${id.replace("opt_", "")}`, color: "slate", chooseCount: 1 },
-      },
-    }));
+    setDraft((prev) =>
+      ensureBase({
+        ...prev,
+        groupOrder: [...prev.groupOrder, id],
+        groups: { ...prev.groups, [id]: [] },
+        groupMeta: {
+          ...prev.groupMeta,
+          [id]: { id, label: `선택검사 ${id.replace("opt_", "")}`, color: "slate", chooseCount: 1 },
+        },
+      }),
+    );
     setActiveGroup(id);
     setActiveTab("builder");
   };
@@ -345,14 +320,14 @@ export default function GeneralPackagesPage() {
   const removeGroup = (gid: GroupId) => {
     if (gid === "base") return;
     setDraft((prev) => {
-      const { [gid]: _, ...restG } = prev.groups;
-      const { [gid]: __, ...restM } = prev.groupMeta;
-      return {
+      const { [gid]: _drop, ...restG } = prev.groups;
+      const { [gid]: _dropM, ...restM } = prev.groupMeta;
+      return ensureBase({
         ...prev,
         groups: restG,
         groupMeta: restM,
         groupOrder: prev.groupOrder.filter((x) => x !== gid),
-      };
+      });
     });
     if (activeGroup === gid) setActiveGroup("base");
   };
@@ -361,13 +336,12 @@ export default function GeneralPackagesPage() {
   const ownerRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     const m = new Map<string, string>();
-    for (const gid of draft.groupOrder)
-      for (const r of draft.groups[gid] || []) m.set(r.examId, gid);
+    for (const gid of draft.groupOrder) for (const r of draft.groups[gid] || []) m.set(r.examId, gid);
     ownerRef.current = m;
   }, [draft.groupOrder, draft.groups]);
 
   const isInCurrent = (examId: string) =>
-    (draft.groups[activeGroup] || []).some((r) => r.examId === examId);
+    safeArr<GroupRow>(draft.groups[activeGroup]).some((r) => r.examId === examId);
 
   const toggleExam = (examId: string) => {
     const ex = allExams.find((x) => x.id === examId);
@@ -384,76 +358,119 @@ export default function GeneralPackagesPage() {
         if (owner && owner !== activeGroup) {
           groups[owner] = (groups[owner] || []).filter((r) => r.examId !== examId);
         }
+        const sexDefault = overrideMap[examId]?.sex ?? "A";
         groups[activeGroup] = [
           ...here,
-          { examId, sex: "A", code: codes[examId] || "", name: ex?.name || "" },
+          { examId, sex: sexDefault, code: codes[examId] || "", name: ex?.name || "" },
         ];
         ownerRef.current.set(examId, activeGroup);
       }
-      return { ...prev, groups };
+
+      return ensureBase({ ...prev, groups });
     });
   };
 
   const clearGroup = (gid: GroupId) =>
-    setDraft((prev) => ({ ...prev, groups: { ...prev.groups, [gid]: [] } }));
+    setDraft((prev) => ensureBase({ ...prev, groups: { ...prev.groups, [gid]: [] } }));
 
   const updateRow = (gid: GroupId, examId: string, patch: Partial<GroupRow>) =>
-    setDraft((prev) => ({
-      ...prev,
-      groups: {
-        ...prev.groups,
-        [gid]: (prev.groups[gid] || []).map((r) => (r.examId === examId ? { ...r, ...patch } : r)),
-      },
-    }));
+    setDraft((prev) =>
+      ensureBase({
+        ...prev,
+        groups: {
+          ...prev.groups,
+          [gid]: safeArr<GroupRow>(prev.groups[gid]).map((r) =>
+            r.examId === examId ? { ...r, ...patch } : r,
+          ),
+        },
+      }),
+    );
 
   const setChooseCount = (gid: GroupId, n: number) =>
-    setDraft((prev) => ({
-      ...prev,
-      groupMeta: {
-        ...prev.groupMeta,
-        [gid]: { ...prev.groupMeta[gid], chooseCount: Math.max(0, Math.floor(n)) },
-      },
-    }));
+    setDraft((prev) =>
+      ensureBase({
+        ...prev,
+        groupMeta: {
+          ...prev.groupMeta,
+          [gid]: { ...prev.groupMeta[gid], chooseCount: Math.max(0, Math.floor(n)) },
+        },
+      }),
+    );
 
-  // Addons
+  // Addons(로컬 패키지 전용 UI — 병원 마스터 추가검사와 별개)
   const [addonName, setAddonName] = useState("");
   const [addonSex, setAddonSex] = useState<Sex | "ALL">("ALL");
   const [addonPrice, setAddonPrice] = useState("");
+
   const addAddon = () => {
     const price = Number((addonPrice || "").replace(/[^0-9]/g, "")) || 0;
     if (!addonName.trim()) return;
-    setDraft((prev) => ({
-      ...prev,
-      addons: [...prev.addons, { name: addonName.trim(), sex: addonSex, price }],
-    }));
+    setDraft((prev) =>
+      ensureBase({
+        ...prev,
+        addons: [...safeArr(prev.addons), { name: addonName.trim(), sex: addonSex, price }],
+      }),
+    );
     setAddonName("");
     setAddonPrice("");
   };
   const removeAddon = (idx: number) =>
-    setDraft((prev) => ({ ...prev, addons: prev.addons.filter((_, i) => i !== idx) }));
+    setDraft((prev) => ensureBase({ ...prev, addons: safeArr(prev.addons).filter((_, i) => i !== idx) }));
 
-  // 검증/저장
+  // 검증/저장 — 이름 + base 1개 이상만
   const isValid = useMemo(() => {
-    if (!draft.from || !draft.to) return false;
-    for (const gid of draft.groupOrder) if ((draft.groups[gid]?.length || 0) === 0) return false;
-    return true;
+    const hasName = !!(draft.name || "").trim();
+    const baseCount = safeArr<GroupRow>(draft.groups?.base).length;
+    return hasName && baseCount > 0;
   }, [draft]);
+
+  // 오버라이드 업서트
+  async function upsertOverridesFromDraft(d: DraftPackage) {
+    const rows: GroupRow[] = d.groupOrder.flatMap((gid) => safeArr<GroupRow>(d.groups[gid]));
+    const rowUpdates = rows.map((r) => ({
+      examId: r.examId,
+      code: (r.code || codes[r.examId] || "").trim() || null,
+      sex: r.sex,
+    }));
+    const codeOnly = Object.entries(codes)
+      .filter(([, v]) => (v || "").trim().length > 0)
+      .map(([examId, code]) => ({ examId, code, sex: null as Sex | null }));
+
+    const seen = new Set<string>();
+    const merged: { examId: string; code?: string | null; sex?: Sex | null }[] = [];
+    for (const u of [...rowUpdates, ...codeOnly]) {
+      if (seen.has(u.examId)) continue;
+      seen.add(u.examId);
+      merged.push(u);
+    }
+
+    if (!merged.length) return;
+    await fetch("/api/m/exams/overrides", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ updates: merged }),
+    }).catch(() => {});
+  }
 
   const saveDraft = async () => {
     if (!isValid) return;
+    const normalized = ensureBase(draft);
     const next = [...packages];
-    const idx = next.findIndex((p) => p.id === draft.id);
-    if (idx === -1) next.unshift(draft);
-    else next[idx] = draft;
-    saveList(next);                  // 로컬 보조 캐시
-    await publishPackages(NS, next); // 서버 반영
-    await refreshFromDB();           // DB 재조회로 단말 간 일관성 확보
-    saveCodes(codes);
-    setMode("list");
+    const idx = next.findIndex((p) => p.id === normalized.id);
+    if (idx === -1) next.unshift(normalized);
+    else next[idx] = normalized;
+
+    await withLock(async () => {
+      saveList(next);
+      await publishPackages(NS, next);
+      await upsertOverridesFromDraft(normalized);
+      await refreshFromDB();
+      saveCodes(codes);
+      setMode("list");
+    });
   };
 
   /* ===== Render ===== */
-
   if (mode === "list") {
     return (
       <div className="p-5 md:p-8 space-y-6">
@@ -463,45 +480,117 @@ export default function GeneralPackagesPage() {
           </h1>
         </div>
 
-        <PackagesGrid
-          items={packages}
-          onAdd={() => {
-            setDraft(makeBlank());
-            setActiveGroup("base");
-            setActiveTab("builder");
-            setMode("edit");
-          }}
-          onEdit={(id) => {
-            const p = packages.find((x) => x.id === id)!;
-            setDraft(structuredClone(p));
-            setActiveGroup("base");
-            setActiveTab("builder");
-            setMode("edit");
-          }}
-          onClone={async (id) => {
-            const src = packages.find((x) => x.id === id)!;
-            const cp = structuredClone(src);
-            cp.id = `pkg_${Date.now()}`;
-            cp.name = `${src.name} 복제`;
-            const next = [cp, ...packages];
-            saveList(next);
-            await publishPackages(NS, next);
-            await refreshFromDB();
-          }}
-          onDelete={async (id) => {
-            if (!confirm("해당 패키지를 삭제하시겠습니까?")) return;
-            const next = packages.filter((x) => x.id !== id);
-            saveList(next);
-            await publishPackages(NS, next);
-            await refreshFromDB();
-          }}
-          onToggleShow={async (id, v) => {
-            const next = packages.map((p) => (p.id === id ? { ...p, showInBooking: v } : p));
-            saveList(next);
-            await publishPackages(NS, next);
-            await refreshFromDB();
-          }}
-        />
+        <section className={card}>
+          <div className={subHead}>등록된 패키지</div>
+          <div className={body}>
+            <div className="mb-4 flex items-center justify-between">
+              <button className={clsx(btnPrimary, busy && "opacity-60")} onClick={() => { setDraft(makeBlank()); setActiveGroup("base"); setActiveTab("builder"); setMode("edit"); }} disabled={busy}>
+                패키지 추가
+              </button>
+            </div>
+
+            {packages.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-400">아직 등록된 패키지가 없습니다.</div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {packages.map((p) => {
+                  const baseCount = safeArr<GroupRow>(p.groups?.base).length;
+                  const optIds = Object.keys(p.groupMeta || {}).filter((id) => id !== "base");
+                  const optionGroups = optIds.length;
+                  const chooseSum = optIds.reduce(
+                    (a, id) => a + (Number(p.groupMeta[id]?.chooseCount) || 0),
+                    0,
+                  );
+                  return (
+                    <div key={p.id} className="rounded-xl border p-4 shadow-sm flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="text-base font-semibold truncate">{p.name}</div>
+                        <span
+                          className={clsx(
+                            "text-xs px-2 py-0.5 rounded-full border",
+                            p.showInBooking
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-gray-50 text-gray-600 border-gray-200",
+                          )}
+                        >
+                          {p.showInBooking ? "예약자 노출" : "미노출"}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-gray-500">
+                        {p.from || "-"} ~ {p.to || "-"}
+                      </div>
+
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-md">기본 {baseCount}</span>
+                        <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">선택묶음 {optionGroups}</span>
+                        <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-md">필수합 {chooseSum}</span>
+                        <span className="ml-auto font-medium">{(p.price || 0).toLocaleString()}원</span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="accent-sky-600 scale-110"
+                            checked={p.showInBooking}
+                            onChange={async (e) => {
+                              const next = packages.map((x) => (x.id === p.id ? { ...x, showInBooking: e.target.checked } : x));
+                              await withLock(async () => {
+                                saveList(next);
+                                await publishPackages(NS, next);
+                                await refreshFromDB();
+                              });
+                            }}
+                            disabled={busy}
+                          />
+                          예약자페이지 노출
+                        </label>
+                        <div className="flex gap-2">
+                          <button className={btn} onClick={() => { setDraft(ensureBase(clone(p))); setActiveGroup("base"); setActiveTab("builder"); setMode("edit"); }} disabled={busy}>
+                            수정
+                          </button>
+                          <button
+                            className={btn}
+                            onClick={async () => {
+                              const cp = ensureBase(clone(p));
+                              cp.id = (crypto as any)?.randomUUID?.() ?? `pkg_${Math.random().toString(36).slice(2)}`;
+                              cp.name = `${p.name} 복제`;
+                              const next = [cp, ...packages];
+                              await withLock(async () => {
+                                saveList(next);
+                                await publishPackages(NS, next);
+                                await refreshFromDB();
+                              });
+                            }}
+                            disabled={busy}
+                          >
+                            복제
+                          </button>
+                          <button
+                            className="px-3 py-2 rounded-lg text-sm border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                            onClick={async () => {
+                              if (!confirm("해당 패키지를 삭제하시겠습니까?")) return;
+                              const next = packages.filter((x) => x.id !== p.id);
+                              await withLock(async () => {
+                                saveList(next);
+                                await publishPackages(NS, next);
+                                await refreshFromDB();
+                              });
+                            }}
+                            disabled={busy}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     );
   }
@@ -519,17 +608,17 @@ export default function GeneralPackagesPage() {
               type="checkbox"
               className="accent-sky-600 scale-110"
               checked={draft.showInBooking}
-              onChange={(e) => setDraft({ ...draft, showInBooking: e.target.checked })}
+              onChange={(e) => setDraft(ensureBase({ ...draft, showInBooking: e.target.checked }))}
             />
             예약자페이지 노출
           </label>
-          <button className={btn} onClick={() => setMode("list")}>
+          <button className={btn} onClick={() => setMode("list")} disabled={busy}>
             목록으로
           </button>
           <button
-            className={clsx(btnPrimary, !isValid && "opacity-50 cursor-not-allowed")}
+            className={clsx(btnPrimary, (!isValid || busy) && "opacity-50 cursor-not-allowed")}
             onClick={saveDraft}
-            disabled={!isValid}
+            disabled={!isValid || busy}
           >
             저장
           </button>
@@ -545,7 +634,7 @@ export default function GeneralPackagesPage() {
             <input
               className={input}
               value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              onChange={(e) => setDraft(ensureBase({ ...draft, name: e.target.value }))}
             />
           </div>
           <div>
@@ -555,10 +644,12 @@ export default function GeneralPackagesPage() {
               inputMode="numeric"
               value={draft.price}
               onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  price: Number(e.target.value.replace(/[^0-9]/g, "")) || 0,
-                })
+                setDraft(
+                  ensureBase({
+                    ...draft,
+                    price: Number(e.target.value.replace(/[^0-9]/g, "")) || 0,
+                  }),
+                )
               }
             />
           </div>
@@ -568,7 +659,7 @@ export default function GeneralPackagesPage() {
               type="date"
               className={input}
               value={draft.from || ""}
-              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+              onChange={(e) => setDraft(ensureBase({ ...draft, from: e.target.value }))}
             />
           </div>
           <div>
@@ -577,7 +668,7 @@ export default function GeneralPackagesPage() {
               type="date"
               className={input}
               value={draft.to || ""}
-              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+              onChange={(e) => setDraft(ensureBase({ ...draft, to: e.target.value }))}
             />
           </div>
         </div>
@@ -596,7 +687,7 @@ export default function GeneralPackagesPage() {
                   onClick={() => setCat(c)}
                   className={clsx(
                     "px-3 py-1.5 rounded-full text-xs border transition",
-                    c === cat ? "bg-sky-600 text-white border-sky-600 shadow-sm" : "border-gray-300 hover:bg-gray-50"
+                    c === cat ? "bg-sky-600 text-white border-sky-600 shadow-sm" : "border-gray-300 hover:bg-gray-50",
                   )}
                 >
                   {c}
@@ -622,7 +713,7 @@ export default function GeneralPackagesPage() {
                     key={e.id}
                     className={clsx(
                       "w-full rounded-lg border px-3 py-2 mb-2 transition flex items-center gap-2",
-                      selected ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200"
+                      selected ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200",
                     )}
                   >
                     <button className="flex-1 text-left hover:opacity-80" onClick={() => toggleExam(e.id)}>
@@ -650,7 +741,7 @@ export default function GeneralPackagesPage() {
             <button
               className={clsx(
                 "px-3 py-1.5 rounded-full text-sm border",
-                activeTab === "builder" ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50"
+                activeTab === "builder" ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50",
               )}
               onClick={() => setActiveTab("builder")}
             >
@@ -659,7 +750,7 @@ export default function GeneralPackagesPage() {
             <button
               className={clsx(
                 "px-3 py-1.5 rounded-full text-sm border",
-                activeTab === "addons" ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50"
+                activeTab === "addons" ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50",
               )}
               onClick={() => setActiveTab("addons")}
             >
@@ -689,7 +780,7 @@ export default function GeneralPackagesPage() {
                         onClick={() => setActiveGroup(gid)}
                       >
                         {m.label} {count(gid)}건
-                        {typeof m.chooseCount === "number" ? ` · 필수 ${m.chooseCount}` : ""}
+                        {typeof m.chooseCount === "number" ? <span className="ml-1">· 필수 {m.chooseCount}</span> : null}
                       </button>
                     );
                   })}
@@ -697,6 +788,7 @@ export default function GeneralPackagesPage() {
                 <button className={btn} onClick={addGroup}>
                   + 그룹 추가
                 </button>
+
                 {activeGroup !== "base" && (
                   <>
                     <div className="flex items-center gap-1 text-sm">
@@ -718,6 +810,7 @@ export default function GeneralPackagesPage() {
                     </button>
                   </>
                 )}
+
                 <div className="flex-1" />
                 <button
                   className="px-3 py-2 rounded-lg text-sm border border-red-300 text-red-600 hover:bg-red-50"
@@ -741,13 +834,13 @@ export default function GeneralPackagesPage() {
               </div>
 
               <div className="px-6 pb-6 max-h-[60vh] overflow-y-auto">
-                {(draft.groups[activeGroup] || []).length === 0 ? (
+                {safeArr<GroupRow>(draft.groups[activeGroup]).length === 0 ? (
                   <div className="py-12 text-center text-gray-400 border rounded-xl">
                     좌측 목록에서 항목을 클릭해 추가해 주세요.
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {(draft.groups[activeGroup] || []).map((row) => (
+                    {safeArr<GroupRow>(draft.groups[activeGroup]).map((row) => (
                       <div
                         key={row.examId}
                         className="rounded-lg border border-gray-200 px-3 py-2 grid items-center gap-2 min-h-[40px]"
@@ -803,7 +896,7 @@ export default function GeneralPackagesPage() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">비용(원)</label>
                   <input
-                    className={clsx(inputSm, "w-[140px] text-right]")}
+                    className={clsx(inputSm, "w-[140px] text-right")}
                     inputMode="numeric"
                     value={addonPrice}
                     onChange={(e) => setAddonPrice(e.target.value)}
@@ -819,12 +912,13 @@ export default function GeneralPackagesPage() {
                   <div className="col-span-7">항목명</div>
                   <div className="col-span-2">성별</div>
                   <div className="col-span-2 text-right">비용</div>
-                  <div className="col-span-1"></div>
+                  <div className="col-span-1" />
                 </div>
-                {draft.addons.length === 0 ? (
+
+                {safeArr<Addon>(draft.addons).length === 0 ? (
                   <div className="px-3 py-6 text-sm text-gray-400">등록된 추가검사가 없습니다.</div>
                 ) : (
-                  draft.addons.map((a, i) => (
+                  safeArr<Addon>(draft.addons).map((a, i) => (
                     <div key={i} className="grid grid-cols-12 gap-0 items-center px-3 py-2 border-t text-sm">
                       <div className="col-span-7">{a.name}</div>
                       <div className="col-span-2">{a.sex === "ALL" ? "전체" : a.sex === "M" ? "남" : "여"}</div>
@@ -845,6 +939,9 @@ export default function GeneralPackagesPage() {
     </div>
   );
 }
+
+
+
 
 
 

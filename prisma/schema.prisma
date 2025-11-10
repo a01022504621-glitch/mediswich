@@ -27,6 +27,7 @@ enum BookingStatus {
   PENDING
   RESERVED
   CONFIRMED
+  AMENDED   // ← 추가: 확정 후 변경 표시
   COMPLETED
   CANCELED
   NO_SHOW
@@ -84,6 +85,9 @@ model Hospital {
 
   // 새 영속 설정
   capacitySettings  CapacitySetting?
+
+  // 코드/성별 전역 오버라이드
+  examOverrides ExamOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -312,6 +316,9 @@ model Booking {
   meta             Json?
   idempotencyKey   String?       @db.VarChar(64) @unique
 
+  // 변경 이력
+  changeLogs BookingChangeLog[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -319,6 +326,20 @@ model Booking {
   @@index([hospitalId, date])
   @@index([hospitalId, date, time])
   @@index([hospitalId, effectiveDate])
+}
+
+/**
+ * 예약 변경 이력
+ */
+model BookingChangeLog {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actor     String?
+  diff      Json
+  createdAt DateTime @default(now())
+
+  @@index([bookingId, createdAt])
 }
 
 /**
@@ -382,6 +403,8 @@ model AddonItem {
 
   name     String
   sex      Sex?
+  // 코드 입력 지원(선택). 전역 오버라이드(ExamOverride)와 병행 사용 가능.
+  code     String?    @db.VarChar(64)
   priceKRW Int     @default(0)
   isActive Boolean @default(true)
 
@@ -392,6 +415,7 @@ model AddonItem {
 
   @@index([hospitalId, isActive])
   @@index([hospitalId, name])
+  @@index([hospitalId, code])
 }
 
 /**
@@ -412,6 +436,27 @@ model AddonItemClient {
 
   @@unique([addonItemId, clientId])
   @@index([clientId])
+}
+
+/**
+ * ===== 코드/성별 전역 오버라이드 =====
+ * 기준: 병원 × examId(public/list.xlsx의 안정 ID)
+ * sexCode: 'A' | 'M' | 'F' (A=전체)
+ */
+model ExamOverride {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  examId   String      @db.VarChar(128)
+  code     String?     @db.VarChar(64)
+  sexCode  String?     @db.VarChar(1) // 'A' | 'M' | 'F'
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @default(now()) @updatedAt
+
+  @@unique([hospitalId, examId])
+  @@index([hospitalId, code])
 }
 
 /**
@@ -459,6 +504,5 @@ model Invoice {
 
   @@index([hospitalId, issuedAt])
 }
-
 
 

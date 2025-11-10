@@ -40,7 +40,12 @@ export async function GET(req: NextRequest) {
         prisma.booking.findMany({
           where: {
             hospitalId,
-            OR: [{ status: "PENDING" }, { status: "RESERVED" }, { status: "CONFIRMED" }],
+            OR: [
+              { status: "PENDING" },
+              { status: "RESERVED" },
+              { status: "CONFIRMED" },
+              { status: "AMENDED" }, // ← 추가
+            ],
           },
           select: { id: true, meta: true },
         })
@@ -118,7 +123,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const items = (rows as unknown as DBBooking[]).map(mapBookingToRow);
+    let items = (rows as unknown as DBBooking[]).map(mapBookingToRow) as any[];
+
+    // AMENDED → "예약변경" 표기 보정
+    items = items.map((it: any) => {
+      if (it && typeof it === "object" && it.예약상태 === "AMENDED") {
+        return { ...it, 예약상태: "예약변경" };
+      }
+      return it;
+    });
 
     return NextResponse.json({
       items,

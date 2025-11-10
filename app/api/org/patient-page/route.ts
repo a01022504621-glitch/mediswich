@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 // app/api/org/patient-page/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
@@ -13,8 +14,8 @@ import {
 } from "@/lib/patient-page/render";
 
 async function getHid() {
-  const sess = await requireSession();
-  const hid = (sess as any)?.hid ?? (sess as any)?.hospitalId;
+  const s = await requireSession();
+  const hid = (s as any)?.hid ?? (s as any)?.hospitalId;
   if (!hid) throw new Error("No hospital in session");
   return String(hid);
 }
@@ -27,9 +28,8 @@ export async function GET() {
       select: { themeJson: true, logoUrl: true, noticeHtml: true, name: true, slug: true },
     });
 
-    const cfg: PatientPageConfig = hospital?.themeJson
-      ? safeParse(hospital.themeJson) ?? defaultConfig()
-      : defaultConfig();
+    const cfg: PatientPageConfig =
+      hospital?.themeJson ? safeParse(hospital.themeJson) ?? defaultConfig() : defaultConfig();
 
     return NextResponse.json({
       ok: true,

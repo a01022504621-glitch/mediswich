@@ -1,10 +1,11 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 // app/api/org/domains/check-txt/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 import { resolveTxt } from "dns/promises";
 import crypto from "crypto";
 
@@ -17,7 +18,9 @@ function nameFor(host: string) {
 }
 
 export async function POST(req: Request) {
-  const org = await requireOrg();
+  const s = await requireSession();
+  const hid = String((s as any).hid || (s as any).hospitalId || "");
+
   const ct = req.headers.get("content-type") || "";
   let host = "";
   if (ct.includes("application/json")) {
@@ -25,7 +28,6 @@ export async function POST(req: Request) {
     host = String(j.host || "");
   } else {
     const text = await req.text();
-    // form-encoded or raw key=value
     const m = text.match(/host=([^&]+)/);
     host = m ? decodeURIComponent(m[1]) : "";
   }
@@ -36,11 +38,11 @@ export async function POST(req: Request) {
   }
 
   const domain = await prisma.hospitalDomain.findUnique({ where: { host: clean } });
-  if (!domain || domain.hospitalId !== org.id) {
+  if (!domain || domain.hospitalId !== hid) {
     return NextResponse.json({ ok: false, error: "host not found" }, { status: 404 });
   }
 
-  const expected = tokenFor(clean, org.id);
+  const expected = tokenFor(clean, hid);
   const name = nameFor(clean);
 
   try {
@@ -61,5 +63,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, verified: false, error: String(e?.message || e) }, { status: 200 });
   }
 }
+
 
 

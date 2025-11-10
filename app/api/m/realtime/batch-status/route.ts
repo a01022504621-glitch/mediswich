@@ -3,10 +3,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// mediswich/app/api/m/realtime/batch-status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 import { pickEffectiveDate } from "@/lib/services/booking-effective-date";
 
 /** YYYY-MM-DD 검사 */
@@ -20,11 +19,12 @@ const toYMD = (d: Date): YMD =>
 /** KR/EN → DB BookingStatus 매핑 */
 function mapStatus(input?: string | null) {
   const s = String(input || "").trim().toUpperCase();
-  if (["PENDING", "RESERVED", "CONFIRMED", "COMPLETED", "CANCELED", "NO_SHOW"].includes(s)) return s;
+  if (["PENDING", "RESERVED", "CONFIRMED", "AMENDED", "COMPLETED", "CANCELED", "NO_SHOW"].includes(s)) return s;
   if (s === "RESERVE") return "RESERVED";
   const KR: Record<string, string> = {
     "예약신청": "PENDING",
     "예약확정": "CONFIRMED",
+    "예약변경": "AMENDED",   // ← 추가
     "검진완료": "COMPLETED",
     "취소": "CANCELED",
     "검진미실시": "NO_SHOW",
@@ -36,7 +36,8 @@ type UpdateIn = { id: string; status?: string; confirmedDate?: string | null; co
 
 export async function POST(req: NextRequest) {
   try {
-    const org = await requireOrg();
+    const s = await requireSession();
+    const hid = String((s as any).hid || (s as any).hospitalId || "");
 
     const body = await req.json();
     const updates: UpdateIn[] = Array.isArray(body?.updates) ? body.updates : [];
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     // 대상 로드
     const bookings = await prisma.booking.findMany({
-      where: { hospitalId: org.id, id: { in: ids } },
+      where: { hospitalId: hid, id: { in: ids } },
       select: { id: true, status: true, meta: true, date: true },
     });
     const byId = new Map(bookings.map(b => [b.id, b]));
@@ -89,7 +90,6 @@ export async function POST(req: NextRequest) {
         }
         meta.confirmedDate = u.confirmedDate;
         delete meta.completedDate;
-        // 효과일 = 예약완료일
         meta.effectiveDate = u.confirmedDate;
 
         tx.push(
@@ -113,7 +113,6 @@ export async function POST(req: NextRequest) {
           continue;
         }
         meta.completedDate = u.completedDate;
-        // 효과일 = 검진완료일
         meta.effectiveDate = u.completedDate;
 
         tx.push(
@@ -123,11 +122,21 @@ export async function POST(req: NextRequest) {
             select: { id: true },
           }),
         );
+      } else if (next === "AMENDED") {
+        // 변경 표시: confirmedDate 유지, effectiveDate는 예약일/확정/완료 규칙으로 재산정
+        const eff = pickEffectiveDate({ date: cur.date, meta });
+        meta.effectiveDate = toYMD(eff);
+        tx.push(
+          prisma.booking.update({
+            where: { id },
+            data: { status: "AMENDED" as any, meta },
+            select: { id: true },
+          }),
+        );
       } else {
-        // 다른 상태로 변경 시 확정/완료일 초기화
+        // 그 외(PENDING/RESERVED/NO_SHOW/CANCELED) → 확정/완료일 제거
         delete meta.confirmedDate;
         delete meta.completedDate;
-        // 효과일 재계산(완료/확정 없으므로 예약일)
         const eff = pickEffectiveDate({ date: cur.date, meta });
         meta.effectiveDate = toYMD(eff);
 
@@ -151,7 +160,7 @@ export async function POST(req: NextRequest) {
     try {
       await prisma.auditLog.create({
         data: {
-          hospitalId: org.id,
+          hospitalId: hid,
           action: "BOOKING_BATCH_STATUS",
           meta: { input: updates, updated: updated.map(x => x.id), skipped } as any,
         },

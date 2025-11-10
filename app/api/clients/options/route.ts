@@ -1,19 +1,20 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// mediswich/app/api/clients/options/route.ts
- 
+
+// app/api/clients/options/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 
 export async function GET() {
   try {
-    const org = await requireOrg(); // 병원 스코프
+    const s = await requireSession();
+    const hid = String((s as any).hid || (s as any).hospitalId || "");
 
     // 병원에 등록된 고객사만
     const rows = await prisma.client.findMany({
-      where: { hospitalId: org.id },
+      where: { hospitalId: hid },
       select: { id: true, name: true },
     });
 
@@ -28,4 +29,5 @@ export async function GET() {
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
+
 

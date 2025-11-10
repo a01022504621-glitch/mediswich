@@ -1,6 +1,6 @@
 // app/(m-protected)/m/org/domains/page.tsx
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 import crypto from "crypto";
 
 type DomainRow = Awaited<ReturnType<typeof prisma.hospitalDomain.findMany>>[number];
@@ -15,15 +15,16 @@ function nameFor(host: string) {
 }
 
 async function addableHosts(hospitalId: string) {
-  // 중복 방지용 샘플(필요시 강화)
   const rows: DomainRow[] = await prisma.hospitalDomain.findMany({ where: { hospitalId } });
   return rows.map((r: DomainRow) => r.host);
 }
 
 export default async function DomainsPage() {
-  const org = await requireOrg(); // org.id == hospitalId
+  const s = await requireSession();
+  const hid = String((s as any).hid || (s as any).hospitalId || "");
+
   const domains: DomainRow[] = await prisma.hospitalDomain.findMany({
-    where: { hospitalId: org.id },
+    where: { hospitalId: hid },
     orderBy: { createdAt: "desc" },
   });
 
@@ -41,10 +42,10 @@ export default async function DomainsPage() {
           if (!host || !host.includes(".")) throw new Error("도메인을 정확히 입력하세요.");
           // 중복 체크
           const exists = await prisma.hospitalDomain.findUnique({ where: { host } });
-          if (exists && exists.hospitalId !== org.id) throw new Error("이미 다른 병원에서 사용 중인 도메인입니다.");
+          if (exists && exists.hospitalId !== hid) throw new Error("이미 다른 병원에서 사용 중인 도메인입니다.");
           if (!exists) {
             await prisma.hospitalDomain.create({
-              data: { hospitalId: org.id, host },
+              data: { hospitalId: hid, host },
             });
           }
         }}
@@ -64,7 +65,7 @@ export default async function DomainsPage() {
 
       <div className="space-y-3">
         {domains.map((d: DomainRow) => {
-          const token = tokenFor(d.host, org.id as any);
+          const token = tokenFor(d.host, hid);
           const txtName = nameFor(d.host);
           return (
             <div key={d.id} className="rounded-2xl border bg-white shadow-sm p-4">

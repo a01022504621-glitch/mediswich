@@ -1,16 +1,18 @@
+// app/api/m/realtime/export/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// app/api/m/realtime/export/route.ts
- 
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 import { buildRealtimeWorkbook } from "@/lib/excel/realtimeExport";
 
 export async function GET(req: NextRequest) {
   try {
-    const org = await requireOrg();
+    const s = await requireSession();
+    const hid = String((s as any).hid || (s as any).hospitalId || "");
+
     const sp = req.nextUrl.searchParams;
     const idsParam = (sp.get("ids") || "").trim();
     if (!idsParam) return NextResponse.json({ error: "ids required" }, { status: 400 });
@@ -18,7 +20,7 @@ export async function GET(req: NextRequest) {
     if (!ids.length) return NextResponse.json({ error: "ids required" }, { status: 400 });
 
     const rows = await prisma.booking.findMany({
-      where: { hospitalId: org.id, id: { in: ids } },
+      where: { hospitalId: hid, id: { in: ids } },
       orderBy: [{ createdAt: "asc" }],
       select: {
         id: true,
@@ -34,13 +36,13 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const fileData = await buildRealtimeWorkbook(rows); // Buffer | Uint8Array | ArrayBuffer
+    const fileData = await buildRealtimeWorkbook(rows as any);
     const filename = `mediswitch-booking-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     // Convert Node Buffer/Uint8Array to ArrayBuffer for NextResponse
     let body: ArrayBuffer;
-    if (fileData instanceof ArrayBuffer) {
-      body = fileData;
+    if ((fileData as any) instanceof ArrayBuffer) {
+      body = fileData as any;
     } else {
       const b: any = fileData; // Buffer or Uint8Array
       body = b.buffer.slice(b.byteOffset || 0, (b.byteOffset || 0) + (b.byteLength || b.length || 0));

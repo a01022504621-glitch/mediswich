@@ -1,17 +1,18 @@
 // app/(m-protected)/m/billing/page.tsx
 import prisma from "@/lib/prisma-scope";
-import { requireOrg } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/session";
 
 export default async function BillingPage() {
-  const org = await requireOrg();
+  const s = await requireSession();
+  const hid = String((s as any).hid || (s as any).hospitalId || "");
 
   const sub = await prisma.hospitalSubscription.findFirst({
-    where: { hospitalId: org.id },
+    where: { hospitalId: hid },
     include: { plan: true },
   });
 
   const invoices = await prisma.invoice.findMany({
-    where: { hospitalId: org.id },
+    where: { hospitalId: hid },
     orderBy: { issuedAt: "desc" },
     take: 12,
   });
@@ -86,3 +87,4 @@ export default async function BillingPage() {
     </section>
   );
 }
+

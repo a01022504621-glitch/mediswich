@@ -1,13 +1,15 @@
+// app/(m-protected)/m/realtime/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /** 상태 */
-type Status = "예약신청" | "예약확정" | "검진완료" | "취소" | "검진미실시";
-const STATUS_ORDER: Status[] = ["예약신청", "예약확정", "검진완료", "취소", "검진미실시"];
+type Status = "예약신청" | "예약확정" | "예약변경" | "검진완료" | "취소" | "검진미실시";
+const STATUS_ORDER: Status[] = ["예약신청", "예약확정", "예약변경", "검진완료", "취소", "검진미실시"];
 const STATUS_DOT: Record<Status, string> = {
   예약신청: "bg-blue-500",
   예약확정: "bg-rose-500",
+  예약변경: "bg-violet-500",
   검진완료: "bg-emerald-500",
   취소: "bg-gray-500",
   검진미실시: "bg-amber-500",
@@ -15,10 +17,11 @@ const STATUS_DOT: Record<Status, string> = {
 const toEN = (s: Status) =>
   s === "예약신청" ? "PENDING" :
   s === "예약확정" ? "CONFIRMED" :
+  s === "예약변경" ? "AMENDED" :
   s === "검진완료" ? "COMPLETED" :
   s === "취소" ? "CANCELED" : "NO_SHOW";
 
-/** Row */
+/** Row (API 응답 구조와 동일) */
 type Row = {
   id: string;
   고객사: string;
@@ -39,6 +42,7 @@ type Row = {
   특수검진: string;
   특수물질: string;
   보건증: string;
+  추가검사?: string;
   회사지원금: number;
   본인부담금: number;
   복용약?: string;
@@ -46,8 +50,29 @@ type Row = {
   예약신청일: string;
 };
 
-const PAGE_SIZE = 10; // 페이지당 고정 10줄
-const COLS = 14; // 테이블 컬럼 수
+type TimelineItem = { at: string; action: string; actor?: string; note?: string };
+type ChangeReq = {
+  exists: boolean;
+  requestedAt?: string;
+  requestedBy?: string;
+  reason?: string;
+  /** 기존값 */
+  prevDate?: string; prevTime?: string; prevExams?: string[]; prevAddons?: string[];
+  /** 변경요청값 */
+  newDate?: string; newTime?: string; newExams?: string[]; newAddons?: string[];
+};
+type Detail = {
+  id: string;
+  confirmedDate?: string;
+  confirmedTime?: string;
+  exams?: string[];
+  addons?: string[];
+  change?: ChangeReq;
+  history?: TimelineItem[];
+};
+
+const PAGE_SIZE = 10;
+const COLS = 14;
 
 export default function RealtimePage() {
   const now = new Date();
@@ -74,15 +99,17 @@ export default function RealtimePage() {
 
   /** 팝업 상태 */
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
-  const [editStatus, setEditStatus] = useState<Status>("예약신청"); // 표시용. 비활성
-  const [editConfirmed, setEditConfirmed] = useState<string | undefined>(undefined);
-  const [editCompleted, setEditCompleted] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<"상세" | "예약변경" | "변경내역">("상세");
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  /** 예약일·완료일 빠른지정 상태 */
   const [saving, setSaving] = useState(false);
 
   /** 일괄변경 UI 상태 */
   const [bulkStatus, setBulkStatus] = useState<Status>("예약확정");
 
-  /** 고객사 목록 로드(여러 엔드포인트 시도) */
+  /** 고객사 목록 로드 */
   useEffect(() => {
     (async () => {
       async function tryFetch(url: string) {
@@ -98,10 +125,7 @@ export default function RealtimePage() {
       ];
       let data: any = null;
       for (const u of candidates) {
-        try {
-          data = await tryFetch(u);
-          break;
-        } catch {}
+        try { data = await tryFetch(u); break; } catch {}
       }
       const arr: any[] =
         Array.isArray(data?.items) ? data.items :
@@ -116,7 +140,6 @@ export default function RealtimePage() {
           name: String(x?.name ?? x?.title ?? x?.label ?? "").trim(),
         }))
         .filter((x) => x.name);
-      // 중복 제거
       const uniqMap = new Map<string, { id: string; name: string }>();
       for (const m of mapped) if (!uniqMap.has(m.name)) uniqMap.set(m.name, m);
       const final = Array.from(uniqMap.values());
@@ -139,7 +162,7 @@ export default function RealtimePage() {
     setPage(1);
   }, [검진연도, 기간From, 기간To]);
 
-  /** 상태 외 필터만 먼저 적용 → 진행현황 카운트는 여기 기준 */
+  /** 상태 외 필터만 먼저 적용 */
   const filteredExceptStatus = useMemo(() => {
     let r = [...rows];
     if (고객등급 !== "전체") r = r.filter(x => x.등급 === 고객등급);
@@ -173,9 +196,9 @@ export default function RealtimePage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  /** 진행현황 카운트(상태 제외 필터 기반) */
+  /** 진행현황 카운트 */
   const counts = useMemo(() => {
-    const base: Record<Status, number> = { 예약신청: 0, 예약확정: 0, 검진완료: 0, 취소: 0, 검진미실시: 0 };
+    const base: Record<Status, number> = { 예약신청: 0, 예약확정: 0, 예약변경: 0, 검진완료: 0, 취소: 0, 검진미실시: 0 };
     for (const r of filteredExceptStatus) base[r.예약상태]++;
     return { ...base, totalAll: filteredExceptStatus.length };
   }, [filteredExceptStatus]);
@@ -207,56 +230,109 @@ export default function RealtimePage() {
   /** 요약 클릭 */
   const clickSummary = (s: "전체" | Status) => { setStatusFilter(s); setPage(1); };
 
-  /** 행 클릭 → 팝업 */
-  const handleRowClick = (row: Row) => {
+  /** 상세/이력/변경요청 로드 */
+  const openDetail = async (row: Row) => {
     setSelectedRow(row);
-    setEditStatus(row.예약상태);
-    setEditConfirmed(row.예약확정일 || undefined);
-    setEditCompleted(row.검진완료일 || undefined);
+    setActiveTab("상세");
+    setLoadingDetail(true);
+    setDetail(null);
+    try {
+      const d = await loadDetail(row.id, row);
+      setDetail(d);
+    } catch {
+      setDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
   };
 
-  /** 단건 저장 */
-  const saveDetail = async () => {
-    if (!selectedRow) return;
-
-    if (editCompleted && !editConfirmed) {
+  /** 빠른 지정 */
+  const quickPick = async (row: Row, kind: "CONFIRMED" | "COMPLETED", date: string) => {
+    if (row.예약상태 === "예약변경" && kind === "COMPLETED") {
+      alert("예약변경 상태입니다. 변경요청을 수락 후 검진완료 처리하세요.");
+      return;
+    }
+    if (kind === "COMPLETED" && !row.예약확정일) {
       alert("예약확정 전 인원입니다. 검진완료 처리 불가능합니다. 예약확정 처리 먼저 해주세요.");
       return;
     }
+    const msg = kind === "CONFIRMED" ? `${date} 예약확정 처리합니다. 진행할까요?` : `${date} 검진완료 처리합니다. 진행할까요?`;
+    if (!confirm(msg)) return;
 
-    const updates: any[] = [];
-    if (editCompleted) {
-      const ok = confirm(`${editCompleted} 검진완료 처리합니다. 진행할까요?`);
-      if (!ok) return;
-      updates.push({ id: selectedRow.id, status: "COMPLETED", completedDate: editCompleted });
-    } else if (editConfirmed) {
-      const ok = confirm(`${editConfirmed} 예약확정 처리합니다. 진행할까요?`);
-      if (!ok) return;
-      updates.push({ id: selectedRow.id, status: "CONFIRMED", confirmedDate: editConfirmed });
-    } else {
-      alert("변경할 날짜가 없습니다.");
+    const body = kind === "CONFIRMED"
+      ? { updates: [{ id: row.id, status: "CONFIRMED", confirmedDate: date }] }
+      : { updates: [{ id: row.id, status: "COMPLETED", completedDate: date }] };
+
+    const r = await fetch("/api/m/realtime/batch-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      alert(j?.error || "저장 실패");
       return;
     }
-
-    setSaving(true);
-    try {
-      const r = await fetch("/api/m/realtime/batch-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ updates }),
-      });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j?.error || "저장 실패");
-      }
-      await fetchList();
-      setSelectedRow(null);
-    } catch (e: any) {
-      alert(e?.message || e);
-    } finally {
-      setSaving(false);
-    }
+    fetchList();
   };
+
+  // 명단 렌더
+  const renderRow = (r: Row | null, idx: number) => {
+    if (!r) {
+      return (
+        <tr key={`empty_${idx}`}>
+          {Array.from({ length: COLS }).map((_, i) => (
+            <td key={i} className="px-3 py-5 border-b border-r last:border-r-0 border-slate-200" />
+          ))}
+        </tr>
+      );
+    }
+    return (
+      <tr
+        key={r.id}
+        onClick={() => openDetail(r)}
+        className="hover:bg-sky-50 cursor-pointer"
+      >
+        <td className="px-3 py-2 text-center border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleOne(r.id, e.target.checked)} />
+        </td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.고객사}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.수검자명}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.등급}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.생년월일}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.예약희망일}</td>
+        <td className="px-3 py-2 w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
+          <DateCell
+            value={r.예약확정일}
+            placeholder="지정"
+            onPick={(d) => quickPick(r, "CONFIRMED", d)}
+            title="예약확정일 지정"
+          />
+        </td>
+        <td className="px-3 py-2 w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
+          <DateCell
+            value={r.검진완료일}
+            placeholder="지정"
+            onPick={(d) => quickPick(r, "COMPLETED", d)}
+            title="검진완료일 지정"
+          />
+        </td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">
+          <span className="inline-flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[r.예약상태]}`} />
+            {r.예약상태}
+          </span>
+        </td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.패키지타입}</td>
+        <td className="px-3 py-2 text-right border-b border-r last:border-r-0 border-slate-200">{Number(r.회사지원금 || 0).toLocaleString()}</td>
+        <td className="px-3 py-2 text-right border-b border-r last:border-r-0 border-slate-200">{Number(r.본인부담금 || 0).toLocaleString()}</td>
+        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.예약신청일}</td>
+      </tr>
+    );
+  };
+
+  const padded = [...pageRows, ...Array.from({ length: Math.max(0, PAGE_SIZE - pageRows.length) }, () => null as any)];
 
   /** 일괄 변경 */
   const bulkApply = async () => {
@@ -324,89 +400,49 @@ export default function RealtimePage() {
     }
   }
 
-  /** 빠른 지정 */
-  const quickPick = async (row: Row, kind: "CONFIRMED" | "COMPLETED", date: string) => {
-    if (kind === "COMPLETED" && !row.예약확정일) {
-      alert("예약확정 전 인원입니다. 검진완료 처리 불가능합니다. 예약확정 처리 먼저 해주세요.");
-      return;
+  /** 변경요청 수락/거절 */
+  const acceptChange = async (id: string) => {
+    if (!confirm("요청된 변경을 수락하시겠습니까?")) return;
+    setSaving(true);
+    try {
+      const ok = await tryAPIsSequential([
+        { url: "/api/m/realtime/accept-change", method: "POST", body: { id } },
+        { url: "/api/m/booking/accept-change", method: "POST", body: { id } },
+        { url: "/api/m/bookings/accept-change", method: "POST", body: { id } },
+        { url: `/api/m/bookings/${id}`, method: "PATCH", body: { op: "ACCEPT_CHANGE" } },
+        { url: "/api/m/realtime/update", method: "POST", body: { id, action: "ACCEPT_CHANGE" } },
+      ]);
+      if (!ok) throw new Error("변경 수락 실패");
+      await fetchList();
+      if (selectedRow) await openDetail(selectedRow);
+      alert("변경 수락 완료");
+    } catch (e: any) {
+      alert(e?.message || "변경 수락 실패");
+    } finally {
+      setSaving(false);
     }
-    const msg = kind === "CONFIRMED" ? `${date} 예약확정 처리합니다. 진행할까요?` : `${date} 검진완료 처리합니다. 진행할까요?`;
-    if (!confirm(msg)) return;
-
-    const body = kind === "CONFIRMED"
-      ? { updates: [{ id: row.id, status: "CONFIRMED", confirmedDate: date }] }
-      : { updates: [{ id: row.id, status: "COMPLETED", completedDate: date }] };
-
-    const r = await fetch("/api/m/realtime/batch-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      alert(j?.error || "저장 실패");
-      return;
-    }
-    fetchList();
   };
-
-  // 명단 렌더(칸 테두리 + 열 고정 + hover)
-  const renderRow = (r: Row | null, idx: number) => {
-    if (!r) {
-      return (
-        <tr key={`empty_${idx}`}>
-          {Array.from({ length: COLS }).map((_, i) => (
-            <td key={i} className="px-3 py-5 border-b border-r last:border-r-0 border-slate-200" />
-          ))}
-        </tr>
-      );
+  const rejectChange = async (id: string) => {
+    if (!confirm("요청된 변경을 거절하시겠습니까?")) return;
+    setSaving(true);
+    try {
+      const ok = await tryAPIsSequential([
+        { url: "/api/m/realtime/reject-change", method: "POST", body: { id } },
+        { url: "/api/m/booking/reject-change", method: "POST", body: { id } },
+        { url: "/api/m/bookings/reject-change", method: "POST", body: { id } },
+        { url: `/api/m/bookings/${id}`, method: "PATCH", body: { op: "REJECT_CHANGE" } },
+        { url: "/api/m/realtime/update", method: "POST", body: { id, action: "REJECT_CHANGE" } },
+      ]);
+      if (!ok) throw new Error("변경 거절 실패");
+      await fetchList();
+      if (selectedRow) await openDetail(selectedRow);
+      alert("변경 거절 완료");
+    } catch (e: any) {
+      alert(e?.message || "변경 거절 실패");
+    } finally {
+      setSaving(false);
     }
-    return (
-      <tr
-        key={r.id}
-        onClick={() => handleRowClick(r)}
-        className="hover:bg-sky-50 cursor-pointer"
-      >
-        <td className="px-3 py-2 text-center border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
-          <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleOne(r.id, e.target.checked)} />
-        </td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{(page - 1) * PAGE_SIZE + idx + 1}</td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.고객사}</td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.수검자명}</td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.등급}</td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.생년월일}</td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.예약희망일}</td>
-        <td className="px-3 py-2 w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
-          <DateCell
-            value={r.예약확정일}
-            placeholder="지정"
-            onPick={(d) => quickPick(r, "CONFIRMED", d)}
-            title="예약확정일 지정"
-          />
-        </td>
-        <td className="px-3 py-2 w-32 whitespace-nowrap border-b border-r last:border-r-0 border-slate-200" onClick={(e) => e.stopPropagation()}>
-          <DateCell
-            value={r.검진완료일}
-            placeholder="지정"
-            onPick={(d) => quickPick(r, "COMPLETED", d)}
-            title="검진완료일 지정"
-          />
-        </td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">
-          <span className="inline-flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[r.예약상태]}`} />
-            {r.예약상태}
-          </span>
-        </td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.패키지타입}</td>
-        <td className="px-3 py-2 text-right border-b border-r last:border-r-0 border-slate-200">{Number(r.회사지원금 || 0).toLocaleString()}</td>
-        <td className="px-3 py-2 text-right border-b border-r last:border-r-0 border-slate-200">{Number(r.본인부담금 || 0).toLocaleString()}</td>
-        <td className="px-3 py-2 border-b border-r last:border-r-0 border-slate-200">{r.예약신청일}</td>
-      </tr>
-    );
   };
-
-  const padded = [...pageRows, ...Array.from({ length: Math.max(0, PAGE_SIZE - pageRows.length) }, () => null as any)];
 
   return (
     <div className="space-y-6">
@@ -427,7 +463,6 @@ export default function RealtimePage() {
               </div>
               <div className="col-span-12 md:col-span-6" />
 
-              {/* ① 조회구분 */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">조회구분</label>
                 <select value={조회구분} onChange={(e) => set조회구분(e.target.value as any)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -439,19 +474,16 @@ export default function RealtimePage() {
                 </select>
               </div>
 
-              {/* ② 기간(From) */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">기간(From)</label>
                 <input type="date" value={기간From} onChange={(e) => set기간From(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
               </div>
 
-              {/* ③ 기간(To) */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">기간(To)</label>
                 <input type="date" value={기간To} onChange={(e) => set기간To(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
               </div>
 
-              {/* ④ 고객사 */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">고객사</label>
                 <select
@@ -466,7 +498,6 @@ export default function RealtimePage() {
                 </select>
               </div>
 
-              {/* ⑤ 고객등급 */}
               <div className="col-span-12 md:col-span-4">
                 <label className="block text-xs text-slate-500 mb-1">고객등급</label>
                 <select value={고객등급} onChange={(e) => set고객등급(e.target.value as any)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -474,7 +505,6 @@ export default function RealtimePage() {
                 </select>
               </div>
 
-              {/* ⑥ 수검자명 */}
               <div className="col-span-12 md:col-span-8">
                 <label className="block text-xs text-slate-500 mb-1">검진대상자</label>
                 <input value={검진대상자} onChange={(e) => set검진대상자(e.target.value)} placeholder="수검자명 검색" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
@@ -551,7 +581,7 @@ export default function RealtimePage() {
           </div>
         </div>
 
-        {/* 테이블: 칸별 테두리 + 열 고정 */}
+        {/* 테이블 */}
         <div className="overflow-x-auto">
           <table className="min-w-full table-fixed text-sm border border-slate-200">
             <thead className="bg-slate-50 text-slate-600">
@@ -586,117 +616,114 @@ export default function RealtimePage() {
         </div>
       </div>
 
-      {/* 상세 팝업 */}
+      {/* 상세/변경 팝업 */}
       {selectedRow && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setSelectedRow(null)}
         >
           <div
-            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl transform transition-all"
+            className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl transform transition-all"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-slate-800">예약 상세 정보</h3>
+              <h3 className="text-lg font-semibold text-slate-800">예약 상세</h3>
               <button onClick={() => setSelectedRow(null)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
 
+            {/* 탭 */}
+            <div className="px-6 pt-4">
+              <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden">
+                {(["상세","예약변경","변경내역"] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-2 text-sm ${activeTab===tab ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <InfoSection title="수검자 정보">
-                <InfoRow label="고객사" value={selectedRow.고객사} />
-                <InfoRow label="수검자명" value={selectedRow.수검자명} />
-                <InfoRow label="생년월일" value={selectedRow.생년월일} />
-                <InfoRow label="휴대폰번호" value={selectedRow.휴대폰번호} />
-                <InfoRow label="이메일" value={selectedRow.이메일} />
-                <InfoRow label="주소" value={selectedRow.주소} />
-              </InfoSection>
+              {/* 로딩/오류 */}
+              {loadingDetail && <div className="text-sm text-slate-500">불러오는 중…</div>}
 
-              <InfoSection title="예약 정보">
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <div className="text-slate-600 font-medium">예약상태</div>
-                  <div className="col-span-2">
-                    <select value={editStatus} disabled className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                      {STATUS_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <p className="mt-1 text-[11px] text-slate-500">상태는 날짜 지정으로만 변경합니다.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <div className="text-slate-600 font-medium">예약희망일</div>
-                  <div className="col-span-2 text-slate-800">{selectedRow.예약희망일}</div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <div className="text-slate-600 font-medium">예약확정일</div>
-                  <div className="col-span-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={editConfirmed || ""}
-                        onChange={(e) => setEditConfirmed(e.target.value || undefined)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                      {editConfirmed && (
-                        <button
-                          type="button"
-                          onClick={() => setEditConfirmed(undefined)}
-                          className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white hover:bg-slate-100"
-                        >
-                          지우기
-                        </button>
-                      )}
+              {/* 상세 */}
+              {!loadingDetail && activeTab === "상세" && (
+                <div className="space-y-4">
+                  {selectedRow.예약상태 === "예약변경" ? (
+                    <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-violet-800">
+                      예약자가 변경을 요청했습니다. 관리자의 수락/거절이 필요합니다.
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-500">확정 처리한 날짜가 아니라 실제 확정된 날짜를 지정합니다.</p>
-                  </div>
-                </div>
+                  ) : null}
 
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <div className="text-slate-600 font-medium">검진완료일</div>
-                  <div className="col-span-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={editCompleted || ""}
-                        onChange={(e) => setEditCompleted(e.target.value || undefined)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                      {editCompleted && (
-                        <button
-                          type="button"
-                          onClick={() => setEditCompleted(undefined)}
-                          className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white hover:bg-slate-100"
-                        >
-                          지우기
-                        </button>
-                      )}
+                  <InfoSection title="수검자 정보">
+                    <InfoRow label="고객사" value={selectedRow.고객사} />
+                    <InfoRow label="수검자명" value={selectedRow.수검자명} />
+                    <InfoRow label="생년월일" value={selectedRow.생년월일} />
+                    <InfoRow label="휴대폰번호" value={selectedRow.휴대폰번호} />
+                    <InfoRow label="이메일" value={selectedRow.이메일} />
+                    <InfoRow label="주소" value={selectedRow.주소} />
+                  </InfoSection>
+
+                  <InfoSection title="예약 정보">
+                    <InfoRow label="예약상태" value={selectedRow.예약상태} />
+                    <InfoRow label="예약희망일" value={selectedRow.예약희망일} />
+                    <InfoRow label="예약확정일" value={selectedRow.예약확정일 || "-"} />
+                    <InfoRow label="검진완료일" value={selectedRow.검진완료일 || "-"} />
+                    <InfoRow label="예약신청일" value={selectedRow.예약신청일} />
+                  </InfoSection>
+
+                  <InfoSection title="검진 정보">
+                    <InfoRow label="패키지타입" value={selectedRow.패키지타입} />
+                    {selectedRow.선택검사A ? <InfoRow label="선택검사 A" value={selectedRow.선택검사A} /> : null}
+                    {selectedRow.선택검사B ? <InfoRow label="선택검사 B" value={selectedRow.선택검사B} /> : null}
+                    <InfoRow label="검사코드" value={selectedRow.검사코드 || "-"} />
+                    <InfoRow label="특수검진" value={selectedRow.특수검진 || "-"} />
+                    <InfoRow label="특수물질" value={selectedRow.특수물질 || "-"} />
+                    <InfoRow label="보건증" value={selectedRow.보건증 || "-"} />
+                    <InfoRow label="추가검사" value={selectedRow.추가검사 || "-"} />
+                  </InfoSection>
+
+                  <InfoSection title="비용 정보">
+                    <InfoRow label="회사지원금" value={`${Number(selectedRow.회사지원금 || 0).toLocaleString()}원`} />
+                    <InfoRow label="본인부담금" value={`${Number(selectedRow.본인부담금 || 0).toLocaleString()}원`} />
+                  </InfoSection>
+
+                  <InfoSection title="문진 정보">
+                    <InfoRow label="복용약" value={selectedRow.복용약 || "-"} />
+                    <InfoRow label="병력" value={selectedRow.병력 || "-"} />
+                  </InfoSection>
+                </div>
+              )}
+
+              {/* 예약변경 탭 */}
+              {!loadingDetail && activeTab === "예약변경" && (
+                <div className="space-y-4">
+                  {selectedRow.예약상태 !== "예약변경" ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+                      예약변경 상태가 아닙니다. 변경요청이 접수되면 이 탭에서 수락/거절할 수 있습니다.
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-500">예약확정 이후에만 지정 가능합니다.</p>
-                  </div>
+                  ) : (
+                    <ChangePanel
+                      row={selectedRow}
+                      detail={detail}
+                      saving={saving}
+                      onAccept={() => acceptChange(selectedRow.id)}
+                      onReject={() => rejectChange(selectedRow.id)}
+                    />
+                  )}
                 </div>
+              )}
 
-                <InfoRow label="예약신청일" value={selectedRow.예약신청일} />
-              </InfoSection>
-
-              <InfoSection title="검진 정보">
-                <InfoRow label="패키지타입" value={selectedRow.패키지타입} />
-                <InfoRow label="선택검사 A" value={selectedRow.선택검사A} />
-                <InfoRow label="선택검사 B" value={selectedRow.선택검사B} />
-                <InfoRow label="검사코드" value={selectedRow.검사코드} />
-                <InfoRow label="특수검진" value={selectedRow.특수검진} />
-                <InfoRow label="특수물질" value={selectedRow.특수물질} />
-                <InfoRow label="보건증" value={selectedRow.보건증} />
-              </InfoSection>
-
-              <InfoSection title="비용 정보">
-                <InfoRow label="회사지원금" value={`${Number(selectedRow.회사지원금 || 0).toLocaleString()}원`} />
-                <InfoRow label="본인부담금" value={`${Number(selectedRow.본인부담금 || 0).toLocaleString()}원`} />
-              </InfoSection>
-
-              <InfoSection title="문진 정보">
-                <InfoRow label="복용약" value={selectedRow.복용약} />
-                <InfoRow label="병력" value={selectedRow.병력} />
-              </InfoSection>
+              {/* 변경내역 탭 */}
+              {!loadingDetail && activeTab === "변경내역" && (
+                <div className="space-y-3">
+                  <HistoryPanel row={selectedRow} detail={detail} />
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex items-center justify-end gap-2">
@@ -707,13 +734,6 @@ export default function RealtimePage() {
               >
                 닫기
               </button>
-              <button
-                onClick={saveDetail}
-                className="px-4 py-2 text-sm font-semibold text-white rounded-lg bg-slate-900 hover:opacity-90 disabled:opacity-50"
-                disabled={saving}
-              >
-                {saving ? "저장중" : "저장"}
-              </button>
             </div>
           </div>
         </div>
@@ -722,7 +742,7 @@ export default function RealtimePage() {
   );
 }
 
-/** 날짜 셀: 값 없으면 버튼 아래 드롭다운 달력 */
+/** 날짜 셀 */
 function DateCell({ value, placeholder, onPick, title }: { value?: string; placeholder: string; onPick: (d: string) => void; title?: string }) {
   const [open, setOpen] = useState(false);
   const [tmp, setTmp] = useState<string>("");
@@ -781,7 +801,119 @@ function DateCell({ value, placeholder, onPick, title }: { value?: string; place
   );
 }
 
-/** 팝업 헬퍼 */
+/** 변경요청 패널 */
+function ChangePanel({
+  row, detail, saving, onAccept, onReject,
+}: {
+  row: Row; detail: Detail | null; saving: boolean; onAccept: () => void; onReject: () => void;
+}) {
+  const ch = detail?.change;
+  if (!ch?.exists) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+        변경요청 데이터가 없습니다. 서버에서 변경요청 스냅샷(meta.changeRequest 등)을 반환해야 합니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-violet-800">
+        예약확정 상태에서 예약자가 변경을 요청한 건입니다. 수락 시 상태는 <b>예약확정</b>으로 유지되고 확정일·항목이 변경되며,
+        거절 시 <b>예약확정</b> 상태와 기존값을 유지합니다.
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <DiffCard title="기존 예약">
+          <KVR k="날짜/시간" v={`${ch.prevDate || row.예약확정일 || "-"}  ${ch.prevTime || "-"}`} />
+          <KVR k="선택검사" v={(ch.prevExams || []).join(", ") || row.선택검사A || row.선택검사B || "-"} />
+          <KVR k="추가검사" v={(ch.prevAddons || []).join(", ") || row.추가검사 || "-"} />
+        </DiffCard>
+        <DiffCard title="변경 요청">
+          <KVR k="날짜/시간" v={`${ch.newDate || "-"}  ${ch.newTime || "-"}`} />
+          <KVR k="선택검사" v={(ch.newExams || []).join(", ") || "-"} />
+          <KVR k="추가검사" v={(ch.newAddons || []).join(", ") || "-"} />
+        </DiffCard>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <DiffCard title="요청 메타">
+          <KVR k="요청 일시" v={ch.requestedAt || "-"} />
+          <KVR k="요청자" v={ch.requestedBy || "예약자"} />
+          <KVR k="사유" v={ch.reason || "-"} />
+        </DiffCard>
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={onReject}
+          className="px-4 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-50"
+          disabled={saving}
+        >
+          변경 거절
+        </button>
+        <button
+          onClick={onAccept}
+          className="px-4 py-2 text-sm font-semibold rounded-lg bg-violet-700 text-white hover:opacity-90 disabled:opacity-50"
+          disabled={saving}
+        >
+          변경 수락
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 변경내역 패널 */
+function HistoryPanel({ row, detail }: { row: Row; detail: Detail | null }) {
+  const items = (detail?.history || []).slice().sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  if (items.length === 0) {
+    // 기본 타임라인 합성
+    const fallback: TimelineItem[] = [
+      { at: row.예약신청일, action: "예약신청" },
+      ...(row.예약확정일 ? [{ at: row.예약확정일, action: "예약확정" }] : []),
+      ...(row.검진완료일 ? [{ at: row.검진완료일, action: "검진완료" }] : []),
+    ];
+    return (
+      <div className="rounded-xl border border-slate-200 p-4">
+        <div className="text-sm text-slate-500 mb-2">서버 이력 없음. 기본 타임라인을 표시합니다.</div>
+        <Timeline items={fallback} />
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <Timeline items={items} />
+    </div>
+  );
+}
+
+const Timeline = ({ items }: { items: TimelineItem[] }) => (
+  <ol className="relative border-l border-slate-200 pl-4">
+    {items.map((it, idx) => (
+      <li key={idx} className="mb-3 ml-2">
+        <span className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-slate-300"></span>
+        <div className="text-sm font-medium text-slate-800">{it.action}</div>
+        <div className="text-xs text-slate-600">{it.at}{it.actor ? ` · ${it.actor}` : ""}</div>
+        {it.note ? <div className="mt-1 text-xs text-slate-500">{it.note}</div> : null}
+      </li>
+    ))}
+  </ol>
+);
+
+const DiffCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="rounded-xl border border-slate-200 p-4">
+    <div className="text-sm font-semibold mb-2">{title}</div>
+    <div className="space-y-1 text-sm">{children}</div>
+  </div>
+);
+const KVR = ({ k, v }: { k: string; v?: string }) => (
+  <div className="grid grid-cols-3 gap-3">
+    <div className="text-slate-600">{k}</div>
+    <div className="col-span-2 text-slate-800">{v || "-"}</div>
+  </div>
+);
+
 const InfoSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
   <div>
     <h4 className="text-sm font-semibold text-slate-500 mb-2 pb-1 border-b">{title}</h4>
@@ -795,4 +927,82 @@ const InfoRow = ({ label, value }: { label: string, value?: string | number }) =
   </div>
 );
 
+/* ---------------- helper: detail / API fallbacks ---------------- */
+
+async function loadDetail(id: string, row: Row): Promise<Detail> {
+  const tryFetch = async (url: string) => {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  };
+  let j: any = null;
+  const urls = [
+    `/api/m/realtime/detail?id=${encodeURIComponent(id)}`,
+    `/api/m/booking/detail?id=${encodeURIComponent(id)}`,
+    `/api/m/booking?id=${encodeURIComponent(id)}`,
+    `/api/m/bookings/${encodeURIComponent(id)}`,
+  ];
+  for (const u of urls) {
+    try { j = await tryFetch(u); break; } catch {}
+  }
+
+  const meta = j?.meta || j || {};
+  const exams = normArr(meta?.examSnapshot?.groups?.flatMap((g: any) => (g?.selected || []).map((s: any) => s?.name))).filter(Boolean);
+  const addons = normArr(meta?.addons?.map((x: any) => x?.name)).filter(Boolean);
+
+  const changeSrc = meta?.changeRequest || meta?.pendingChange || j?.changeRequest || j?.pendingChange || {};
+  const change: ChangeReq = {
+    exists: !!(changeSrc && (changeSrc.newDate || changeSrc.newTime || (changeSrc.newExams?.length) || (changeSrc.newAddons?.length))),
+    requestedAt: changeSrc.requestedAt || changeSrc.createdAt || "",
+    requestedBy: changeSrc.requestedBy || "",
+    reason: changeSrc.reason || changeSrc.note || "",
+    prevDate: changeSrc.prevDate || meta?.confirmedDate || row.예약확정일 || "",
+    prevTime: changeSrc.prevTime || meta?.time || "",
+    prevExams: normArr(changeSrc.prevExams) || exams || [],
+    prevAddons: normArr(changeSrc.prevAddons) || addons || [],
+    newDate: changeSrc.newDate || "",
+    newTime: changeSrc.newTime || "",
+    newExams: normArr(changeSrc.newExams),
+    newAddons: normArr(changeSrc.newAddons),
+  };
+
+  const histSrc: any[] =
+    normArr(j?.history) ||
+    normArr(j?.items) ||
+    normArr(j?.rows) ||
+    normArr(j?.data?.items) || [];
+  const history: TimelineItem[] = histSrc.map((h: any) => ({
+    at: String(h?.at || h?.createdAt || h?.ts || ""),
+    action: String(h?.action || h?.type || h?.event || ""),
+    actor: h?.actor || h?.by || h?.user || "",
+    note: h?.note || h?.reason || "",
+  })).filter(x => x.at && x.action);
+
+  return {
+    id,
+    confirmedDate: meta?.confirmedDate || row.예약확정일 || "",
+    confirmedTime: meta?.time || "",
+    exams, addons,
+    change,
+    history,
+  };
+}
+
+function normArr(x: any): any[] {
+  return Array.isArray(x) ? x : [];
+}
+
+async function tryAPIsSequential(steps: Array<{ url: string; method?: "GET" | "POST" | "PATCH"; body?: any }>) {
+  for (const s of steps) {
+    try {
+      const r = await fetch(s.url, {
+        method: s.method || "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: s.body ? JSON.stringify(s.body) : undefined,
+      });
+      if (r.ok) return true;
+    } catch {}
+  }
+  return false;
+}
 

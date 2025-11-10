@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import dynamic from "next/dynamic";
+import { loadCodes, saveCodes } from "@/lib/examStore";
 
 const ClientSelect = dynamic(() => import("../corp/_components/ClientSelect.client"), { ssr: false });
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -13,6 +14,16 @@ type ExcelRow = { 카테고리?: string; 검진세부항목?: string; 검사명?
 type Exam = { id: string; category: string; detail: string; name: string };
 type Client = { id: string; name: string };
 
+function stableId(category: string, detail: string, name: string) {
+  const key = [category, detail, name].map((s) => (s || "").trim().toLowerCase()).join("|");
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+  }
+  return "ex_" + h.toString(36);
+}
+
 async function loadExcel(): Promise<Exam[]> {
   const XLSX = await import("xlsx");
   const res = await fetch("/list.xlsx", { cache: "no-store" });
@@ -21,13 +32,13 @@ async function loadExcel(): Promise<Exam[]> {
   const wb = XLSX.read(ab, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows: ExcelRow[] = XLSX.utils.sheet_to_json(ws);
-  let seq = 0;
+
   const toExam = (r: ExcelRow): Exam | null => {
     const category = (r.카테고리 || "").toString().trim();
     const detail = (r.검진세부항목 || "").toString().trim();
     const name = (r.검사명 || "").toString().trim();
     if (!category || !name) return null;
-    return { id: `ex_${seq++}`, category, detail, name };
+    return { id: stableId(category, detail, name), category, detail, name };
   };
   return rows.map(toExam).filter(Boolean) as Exam[];
 }
@@ -41,7 +52,15 @@ const inputSm = "w-full rounded-md border border-gray-300 px-2 py-1 text-xs outl
 const btn = "px-3 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-50";
 const btnPrimary = "px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:opacity-90";
 
-type Addon = { id?: string; name: string; sex: Sex; price: number | null; visible: boolean; clientId: string | null };
+type Addon = {
+  id?: string;
+  name: string;
+  sex: Sex;
+  price: number | null;
+  visible: boolean;
+  clientId: string | null;
+  code?: string | null; // ← 코드 필드 추가
+};
 
 export default function AddonManagePage() {
   const [ready, setReady] = useState(false);
@@ -63,8 +82,37 @@ export default function AddonManagePage() {
     loadExcel().then(setAllExams).catch((e) => setExcelErr(e.message)).finally(() => setLoading(false));
   }, []);
 
+  // 코드맵 + 서버 오버라이드 병합(글로벌 네임스페이스)
+  const [codeMap, setCodeMap] = useState<Record<string, string>>({});
+  const [overrideMap, setOverrideMap] = useState<Record<string, { code?: string; sex?: Sex }>>({});
+  useEffect(() => {
+    const base = loadCodes();
+    setCodeMap(base);
+    (async () => {
+      try {
+        const r = await fetch("/api/m/exams/overrides", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = await r.json().catch(() => null as any);
+        const map = (j?.map || {}) as Record<string, { code?: string; sex?: Sex }>;
+        setOverrideMap(map);
+        const merged = { ...base };
+        for (const [k, v] of Object.entries(map)) if (v?.code) merged[k] = v.code!;
+        setCodeMap(merged);
+        saveCodes(merged);
+      } catch {}
+    })();
+  }, []);
+
+  const setCode = (examId: string, code: string) => {
+    setCodeMap((prev) => {
+      const next = { ...prev, [examId]: code };
+      saveCodes(next);
+      return next;
+    });
+  };
+
   // 선택된 고객사 (""=전체 보기, null=공통 저장)
-  const [targetClient, setTargetClient] = useState<string>(""); 
+  const [targetClient, setTargetClient] = useState<string>("");
   const currentClientId = targetClient || null;
 
   // 서버 목록
@@ -84,9 +132,22 @@ export default function AddonManagePage() {
     return allExams.filter(e => (cat === "전체" || e.category === cat) && (!s || e.name.toLowerCase().includes(s) || e.detail.toLowerCase().includes(s)));
   }, [allExams, cat, q]);
 
+  // Excel 선택 연동용 examId
+  const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
+
   // 신규 추가/수정 폼
-  const [form, setForm] = useState<Addon>({ name: "", sex: "A", price: null, visible: true, clientId: null });
+  const [form, setForm] = useState<Addon>({ name: "", sex: "A", price: null, visible: true, clientId: null, code: "" });
   useEffect(() => { setForm((f) => ({ ...f, clientId: currentClientId })); }, [currentClientId]);
+
+  const upsertOverride = async (examId: string, code: string | null) => {
+    try {
+      await fetch("/api/m/exams/overrides", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ updates: [{ examId, code: (code || "").trim() || null }] }),
+      });
+    } catch {}
+  };
 
   const submit = async () => {
     if (!form.name.trim()) return alert("항목명을 입력해 주세요.");
@@ -100,14 +161,28 @@ export default function AddonManagePage() {
         price: typeof form.price === "number" ? form.price : null,
         visible: form.visible,
         clientId: currentClientId,
+        code: (form.code || "").trim() || null,
       }),
     }).then(r => r.json());
     if (!res.ok) return alert(res.error || "저장 실패");
-    setForm({ name: "", sex: "A", price: null, visible: true, clientId: currentClientId });
+
+    // Excel에서 선택된 항목이었다면 글로벌 코드맵 및 오버라이드 동기화
+    if (selectedExamId) {
+      const c = (form.code || "").trim();
+      setCode(selectedExamId, c);
+      await upsertOverride(selectedExamId, c || null);
+    }
+
+    setForm({ name: "", sex: "A", price: null, visible: true, clientId: currentClientId, code: "" });
+    setSelectedExamId(null);
     mutate();
   };
 
-  const editRow = (r: Addon) => setForm({ ...r });
+  const editRow = (r: Addon) => {
+    setForm({ ...r, code: r.code ?? "" });
+    setSelectedExamId(null); // DB 레코드엔 examId가 없으므로 코드맵은 건드리지 않음
+  };
+
   const delRow = async (id: string) => {
     if (!confirm("해당 추가검사를 삭제하시겠습니까?")) return;
     const res = await fetch(`/api/m/addons/${id}`, { method: "DELETE" }).then(r => r.json());
@@ -176,12 +251,28 @@ export default function AddonManagePage() {
               {filtered.map(e => (
                 <div key={e.id}
                      className="w-full rounded-lg border px-3 py-2 mb-2 transition flex items-center gap-2 border-gray-200">
-                  <button className="flex-1 text-left hover:opacity-80"
-                          onClick={() => setForm((f) => ({ ...f, name: e.name }))}>
+                  <button
+                    className="flex-1 text-left hover:opacity-80"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, name: e.name, code: codeMap[e.id] || "" }));
+                      setSelectedExamId(e.id);
+                    }}
+                  >
                     <div className="truncate text-sm">{e.name}</div>
                     <div className="text-[11px] text-gray-400">{e.detail}</div>
                   </button>
-                  <button className={btn} onClick={() => setForm((f)=>({ ...f, name: e.name }))}>선택</button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-gray-500">코드</span>
+                    <input
+                      className={clsx(inputSm, "w-[120px]")}
+                      value={codeMap[e.id] || ""}
+                      onChange={(ev) => {
+                        setCode(e.id, ev.target.value);
+                        if (selectedExamId === e.id) setForm((f) => ({ ...f, code: ev.target.value }));
+                      }}
+                      placeholder="선택"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -192,7 +283,7 @@ export default function AddonManagePage() {
         <section className={clsx(card, "lg:col-span-6")}>
           <div className={subHead}>추가검사 등록</div>
           <div className={body + " space-y-4"}>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
               <div className="md:col-span-3">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">항목명</label>
                 <input className={input} value={form.name} onChange={(e)=>setForm({...form, name:e.target.value})}/>
@@ -211,6 +302,18 @@ export default function AddonManagePage() {
                          setForm({...form, price: v===""?null:Number(v)});
                        }}/>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">코드</label>
+                <input
+                  className={inputSm}
+                  value={form.code ?? ""}
+                  onChange={(e) => {
+                    setForm({ ...form, code: e.target.value });
+                    if (selectedExamId) setCode(selectedExamId, e.target.value);
+                  }}
+                  placeholder="선택(Excel에서 항목 선택 시 자동 채움)"
+                />
+              </div>
             </div>
             <label className="inline-flex items-center gap-2 text-sm">
               <input type="checkbox" className="accent-sky-600 scale-110"
@@ -220,27 +323,29 @@ export default function AddonManagePage() {
             <div className="flex gap-2">
               <button className={btnPrimary} onClick={submit}>{form.id ? "수정" : "추가"}</button>
               {form.id && (
-                <button className={btn} onClick={()=>setForm({ name:"", sex:"A", price:null, visible:true, clientId: currentClientId })}>새로 입력</button>
+                <button className={btn} onClick={()=>{ setForm({ name:"", sex:"A", price:null, visible:true, clientId: currentClientId, code: "" }); setSelectedExamId(null); }}>새로 입력</button>
               )}
             </div>
 
             <div className="mt-6 rounded-xl border overflow-hidden">
               <div className="grid grid-cols-12 gap-0 text-xs bg-gray-50 px-3 py-2">
-                <div className="col-span-6">항목명</div>
+                <div className="col-span-5">항목명</div>
                 <div className="col-span-1">성별</div>
                 <div className="col-span-2 text-right">비용</div>
+                <div className="col-span-2">코드</div>
                 <div className="col-span-1 text-center">노출</div>
-                <div className="col-span-2"></div>
+                <div className="col-span-1" />
               </div>
               {(items || []).length === 0 ? (
                 <div className="px-3 py-6 text-sm text-gray-400">등록된 추가검사가 없습니다.</div>
               ) : items.map((r) => (
                 <div key={r.id} className="grid grid-cols-12 gap-0 items-center px-3 py-2 border-t text-sm">
-                  <div className="col-span-6 truncate">{r.name}</div>
+                  <div className="col-span-5 truncate">{r.name}</div>
                   <div className="col-span-1">{r.sex==="A"?"전체":r.sex==="M"?"남":"여"}</div>
                   <div className="col-span-2 text-right">{(r.price || 0).toLocaleString()}원</div>
+                  <div className="col-span-2 truncate">{r.code ?? "-"}</div>
                   <div className="col-span-1 text-center">{r.visible ? "노출" : "숨김"}</div>
-                  <div className="col-span-2 text-right flex items-center justify-end gap-2">
+                  <div className="col-span-1 text-right flex items-center justify-end gap-2">
                     <button className={btn} onClick={()=>editRow(r)}>수정</button>
                     <button className="px-3 py-2 rounded-lg text-sm border border-red-300 text-red-600 hover:bg-red-50"
                             onClick={()=> delRow(r.id!)}>삭제</button>
@@ -254,5 +359,6 @@ export default function AddonManagePage() {
     </div>
   );
 }
+
 
 

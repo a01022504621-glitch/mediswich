@@ -2,46 +2,41 @@
 "use client";
 
 import {
+  useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useDeferredValue,
   useTransition,
-  useCallback,
 } from "react";
 import {
   loadCodes,
   saveCodes,
-  loadPackages,
   savePackages,
   publishPackages,
+  ensureHospitalScope,
+  loadPackagesDBFirst,
 } from "@/lib/examStore";
 
-/* ===== Types ===== */
+/* ================= Types ================= */
 type Sex = "A" | "M" | "F";
 type ExcelRow = { 카테고리?: string; 검진세부항목?: string; 검사명?: string };
 type Exam = { id: string; category: string; detail: string; name: string };
 
-type GroupId = string;
 type GroupRow = { examId: string; sex: Sex; memo?: string; code?: string; name?: string };
-type GroupMeta = { id: GroupId; label: string; color: "sky" | "slate"; chooseCount?: number | null };
-type Addon = { name: string; sex: Sex | "ALL"; price: number };
 
 type DraftPackage = {
   id: string;
   name: string;
   from?: string | null;
   to?: string | null;
-  price: number;
-  groups: Record<GroupId, GroupRow[]>;
-  groupOrder: GroupId[];
-  groupMeta: Record<GroupId, GroupMeta>;
-  addons: Addon[];
-  showInBooking: boolean;
+  price: number; // 표시가(0 가능)
+  base: GroupRow[]; // NHIS는 기본항목만
+  showInBooking: boolean; // 예약자 노출
 };
 
-/* ===== UI Utils ===== */
+/* ================= UI Utils ================= */
 const clsx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(" ");
 const input =
   "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400";
@@ -51,13 +46,12 @@ const card = "bg-white shadow-sm rounded-2xl border border-gray-200";
 const subHead = "px-6 py-3 text-sm font-semibold text-gray-700 border-b";
 const body = "px-6 py-6";
 const btn = "px-3 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-50";
-const btnPrimary = "px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:opacity-90";
+const btnPrimary =
+  "px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:opacity-90";
 
-/* ===== Small Utils ===== */
-// 결정적 ID (카테고리|세부|검사명 기반)
+/* ================= Small Utils ================= */
 function stableId(category: string, detail: string, name: string) {
   const key = [category, detail, name].map((s) => (s || "").trim().toLowerCase()).join("|");
-  // 경량 FNV-like 해시 → base36
   let h = 2166136261 >>> 0;
   for (let i = 0; i < key.length; i++) {
     h ^= key.charCodeAt(i);
@@ -72,8 +66,9 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 500) {
     t = setTimeout(() => fn(...args), ms);
   };
 }
+const safeArr = <T,>(v: any): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
-/* ===== Excel Loader (결정적 ID 생성) ===== */
+/* ================= Excel Loader ================= */
 async function loadExcel(): Promise<Exam[]> {
   const XLSX = await import("xlsx");
   const res = await fetch("/list.xlsx", { cache: "no-store" });
@@ -90,115 +85,78 @@ async function loadExcel(): Promise<Exam[]> {
     if (!category || !name) return null;
     return { id: stableId(category, detail, name), category, detail, name };
   };
+
   return rows.map(toExam).filter(Boolean) as Exam[];
 }
 
-/* ===== Packages Grid (list) ===== */
-function PackagesGrid({
-  items,
-  onAdd,
-  onEdit,
-  onClone,
-  onDelete,
-  onToggleShow,
-}: {
-  items: DraftPackage[];
-  onAdd: () => void;
-  onEdit: (id: string) => void;
-  onClone: (id: string) => void;
-  onDelete: (id: string) => void;
-  onToggleShow: (id: string, v: boolean) => void;
-}) {
-  return (
-    <section className={card}>
-      <div className={subHead}>등록된 패키지</div>
-      <div className={body}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">공단검진 패키지</h2>
-          <button className={btnPrimary} onClick={onAdd}>
-            패키지 추가
-          </button>
-        </div>
-        {items.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">아직 등록된 패키지가 없습니다.</div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {items.map((p) => {
-              const baseCount = p.groups.base?.length || 0;
-              const optIds = Object.keys(p.groupMeta).filter((id) => id !== "base");
-              const optionGroups = optIds.length;
-              const chooseSum = optIds.reduce((a, id) => a + (Number(p.groupMeta[id]?.chooseCount) || 0), 0);
-              return (
-                <div key={p.id} className="flex flex-col gap-3 rounded-xl border p-4 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="truncate text-base font-semibold">{p.name}</div>
-                    <span
-                      className={clsx(
-                        "rounded-full border px-2 py-0.5 text-xs",
-                        p.showInBooking
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-gray-200 bg-gray-50 text-gray-600"
-                      )}
-                    >
-                      {p.showInBooking ? "예약자 노출" : "미노출"}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {p.from || "-"} ~ {p.to || "-"}
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sky-700">기본 {baseCount}</span>
-                    <span className="rounded-md bg-slate-50 px-2 py-0.5 text-slate-700">선택묶음 {optionGroups}</span>
-                    <span className="rounded-md bg-slate-50 px-2 py-0.5 text-slate-700">필수합 {chooseSum}</span>
-                    <span className="ml-auto font-medium">{(p.price || 0).toLocaleString()}원</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-2">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="scale-110 accent-sky-600"
-                        checked={p.showInBooking}
-                        onChange={(e) => onToggleShow(p.id, e.target.checked)}
-                      />
-                      예약자페이지 노출
-                    </label>
-                    <div className="flex gap-2">
-                      <button className={btn} onClick={() => onEdit(p.id)}>
-                        수정
-                      </button>
-                      <button className={btn} onClick={() => onClone(p.id)}>
-                        복제
-                      </button>
-                      <button
-                        className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                        onClick={() => onDelete(p.id)}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </section>
-  );
+/* ===== NHIS 변환기 =====
+   서버(일반 포맷) 또는 이미-드래프트 → NHIS 드래프트(base[]) */
+function isDraftNhisPackage(x: any): x is DraftPackage {
+  return x && Array.isArray(x.base) && typeof x.name === "string";
+}
+function toNhisDraft(raw: any): DraftPackage {
+  // 이미 Draft 형태면 필드 보정만 수행
+  if (isDraftNhisPackage(raw)) {
+    return {
+      id: String(raw.id ?? crypto.randomUUID()),
+      name: String(raw.name ?? ""),
+      from: raw.from ?? null,
+      to: raw.to ?? null,
+      price: Number.isFinite(raw.price) ? Number(raw.price) : 0,
+      base: safeArr<any>(raw.base).map((v) => ({
+        examId: v.examId ?? v.id ?? "",
+        name: v.name ?? "",
+        sex: (v.sex as Sex) ?? "A",
+        memo: v.memo ?? "",
+        code: v.code ?? "",
+      })),
+      showInBooking: Boolean(raw.showInBooking ?? true),
+    };
+  }
+
+  // 서버 포맷(normalized) → Draft 변환
+  const groups = raw?.groups || raw?.tags?.groups || {};
+  const basic = groups.base || groups.basic || {};
+  const values: any[] =
+    Array.isArray(basic)
+      ? basic
+      : Array.isArray(basic.values)
+      ? basic.values
+      : Array.isArray(basic.items)
+      ? basic.items
+      : [];
+
+  return {
+    id: String(raw?.id ?? crypto.randomUUID()),
+    name: String(raw?.name ?? raw?.title ?? ""),
+    from: raw?.from ?? raw?.tags?.period?.from ?? raw?.startDate ?? "",
+    to: raw?.to ?? raw?.tags?.period?.to ?? raw?.endDate ?? "",
+    price: Number.isFinite(raw?.price) ? Number(raw.price) : 0,
+    base: values.map((v) => ({
+      examId: v.id ?? v.examId ?? "",
+      name: v.name ?? "",
+      sex: (v.sex as Sex) ?? "A",
+      memo: v.memo ?? "",
+      code: v.code ?? "",
+    })),
+    showInBooking: Boolean(raw?.showInBooking ?? raw?.visible ?? true),
+  };
 }
 
-/* ===== Page ===== */
+/* ================= Page ================= */
 const NS = "nhis" as const;
 
-export default function NHISPackagesPage() {
+export default function NhisPackagesPage() {
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [excelErr, setExcelErr] = useState<string | null>(null);
-  const [codes, setCodes] = useState<Record<string, string>>({});
-  const [isPending, startTransition] = useTransition();
 
-  // 코드 저장(디바운스)
-  const saveCodesDebounced = useMemo(() => debounce(saveCodes, 500), []);
+  // 전역 코드맵 + 서버 오버라이드 연동
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const [overrideMap, setOverrideMap] = useState<Record<string, { code?: string; sex?: Sex }>>({});
+  const [isPending, startTransition] = useTransition();
+  const saveCodesDebounced = useMemo(() => debounce((m: Record<string, string>) => saveCodes(m), 500), []);
+
   const setCode = useCallback(
     (examId: string, code: string) => {
       setCodes((prev) => {
@@ -206,178 +164,196 @@ export default function NHISPackagesPage() {
         saveCodesDebounced(next);
         return next;
       });
-      // 드래프트 내 동일 examId 코드 동기 반영
+
+      // 빌더 반영
       startTransition(() => {
-        setDraft((prev) => {
-          const groups = { ...prev.groups };
-          for (const gid of prev.groupOrder) {
-            const rows = groups[gid] || [];
-            let changed = false;
-            const nextRows = rows.map((r) => {
-              if (r.examId !== examId) return r;
-              changed = true;
-              return { ...r, code };
-            });
-            if (changed) groups[gid] = nextRows;
-          }
-          return { ...prev, groups };
-        });
+        setDraft((prev) => ({
+          ...prev,
+          base: (prev.base || []).map((r) => (r.examId === examId ? { ...r, code } : r)),
+        } as DraftPackage));
       });
     },
-    [saveCodesDebounced]
+    [saveCodesDebounced, startTransition],
   );
 
+  // 초기 데이터
   useEffect(() => {
-    setCodes(loadCodes());
+    setCodes(loadCodes()); // 전역 코드맵
     loadExcel()
-      .then(setAllExams)
+      .then((rows) => {
+        const nhis = rows.filter((r) => /nhis|공단|국가검진/i.test(r.category ?? ""));
+        setAllExams(nhis.length ? nhis : rows);
+      })
       .catch((e) => setExcelErr(e.message))
       .finally(() => setLoading(false));
   }, []);
 
-  // 신규 드래프트(공단: 기본만 시작)
+  // 서버 오버라이드 로드 → 코드맵과 병합
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/m/exams/overrides", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = await r.json().catch(() => null as any);
+        const map = (j?.map || {}) as Record<string, { code?: string; sex?: Sex }>;
+        setOverrideMap(map);
+
+        const merged = { ...loadCodes() };
+        for (const [k, v] of Object.entries(map)) {
+          if (v?.code) merged[k] = v.code;
+        }
+        setCodes(merged);
+        saveCodesDebounced(merged);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [saveCodesDebounced]);
+
+  // 변이 락
+  const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const withLock = useCallback(async (fn: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }, []);
+
+  // 신규 드래프트
   const makeBlank = (): DraftPackage => ({
-    id: `pkg_${Date.now()}`,
-    name: "국가검진 패키지(예시)",
+    id: crypto.randomUUID(),
+    name: "공단검진 패키지(예시)",
     from: "",
     to: "",
     price: 0,
-    groups: { base: [] },
-    groupOrder: ["base"],
-    groupMeta: { base: { id: "base", label: "기본검사", color: "sky" } },
-    addons: [],
+    base: [],
     showInBooking: true,
   });
 
-  const [packages, setPackages] = useState<DraftPackage[]>(() => loadPackages(NS));
+  // DB 우선 로드
+  const [packages, setPackages] = useState<DraftPackage[]>([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      await ensureHospitalScope();
+      const list = (await loadPackagesDBFirst(NS)) as any[];
+      if (!alive) return;
+      const norm = safeArr<any>(list).map(toNhisDraft);
+      setPackages(norm);
+      savePackages(NS, norm);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const refreshFromDB = useCallback(async () => {
+    const list = (await loadPackagesDBFirst(NS)) as any[];
+    const norm = safeArr<any>(list).map(toNhisDraft);
+    setPackages(norm);
+    savePackages(NS, norm);
+  }, []);
+
   const saveList = (next: DraftPackage[]) => {
-    setPackages(next);
-    savePackages(NS, next); // 로컬만 저장
+    const norm = safeArr(next).map(toNhisDraft);
+    setPackages(norm);
+    savePackages(NS, norm);
   };
 
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [draft, setDraft] = useState<DraftPackage>(makeBlank());
 
-  // 좌측 목록 필터
+  /* 좌측 목록 필터 */
   const categories = useMemo(
     () => ["전체", ...Array.from(new Set(allExams.map((e) => e.category).filter(Boolean)))],
-    [allExams]
+    [allExams],
   );
   const [cat, setCat] = useState("전체");
   const [q, setQ] = useState("");
   const dq = useDeferredValue(q);
+
   const filtered = useMemo(() => {
     const s = dq.trim().toLowerCase();
     return allExams.filter(
       (e) =>
         (cat === "전체" || e.category === cat) &&
-        (!s || e.name.toLowerCase().includes(s) || e.detail.toLowerCase().includes(s))
+        (!s || e.name.toLowerCase().includes(s) || e.detail.toLowerCase().includes(s)),
     );
   }, [allExams, cat, dq]);
 
-  // 빌더 상태
-  const [activeGroup, setActiveGroup] = useState<GroupId>("base");
-  const [activeTab, setActiveTab] = useState<"builder" | "addons">("builder");
-  const meta = (gid: GroupId) => draft.groupMeta[gid];
-  const count = (gid: GroupId) => draft.groups[gid]?.length || 0;
-
-  // 옵션 그룹 관리(A~Z)
-  function nextOptId() {
-    const usedFromOrder = draft.groupOrder.filter((id) => id.startsWith("opt_")).map((id) => id.replace("opt_", ""));
-    const usedFromMeta = Object.keys(draft.groupMeta).filter((id) => id.startsWith("opt_")).map((id) => id.replace("opt_", ""));
-    const used = new Set([...usedFromOrder, ...usedFromMeta]);
-    for (let i = 0; i < 26; i++) {
-      const ch = String.fromCharCode(65 + i);
-      if (!used.has(ch)) return `opt_${ch}`;
-    }
-    const maxChar = Array.from(used).reduce((m, c) => Math.max(m, c.charCodeAt(0)), 64);
-    return `opt_${String.fromCharCode(maxChar + 1)}`;
-  }
-  const addGroup = () => {
-    const id = nextOptId();
-    if (draft.groupOrder.includes(id) || draft.groupMeta[id]) return;
-    setDraft((prev) => ({
-      ...prev,
-      groupOrder: [...prev.groupOrder, id],
-      groups: { ...prev.groups, [id]: [] },
-      groupMeta: { ...prev.groupMeta, [id]: { id, label: `선택검사 ${id.replace("opt_", "")}`, color: "slate", chooseCount: 1 } },
-    }));
-    setActiveGroup(id);
-    setActiveTab("builder");
-  };
-  const removeGroup = (gid: GroupId) => {
-    if (gid === "base") return;
-    setDraft((prev) => {
-      const { [gid]: _drop, ...restG } = prev.groups;
-      const { [gid]: _drop2, ...restM } = prev.groupMeta;
-      return { ...prev, groups: restG, groupMeta: restM, groupOrder: prev.groupOrder.filter((x) => x !== gid) };
-    });
-    if (activeGroup === gid) setActiveGroup("base");
-  };
-  const setChooseCount = (gid: GroupId, n: number) =>
-    setDraft((prev) => ({
-      ...prev,
-      groupMeta: { ...prev.groupMeta, [gid]: { ...prev.groupMeta[gid], chooseCount: Math.max(0, Math.floor(n)) } },
-    }));
-
-  // 한 항목은 한 그룹에만 소속
-  const ownerRef = useRef<Map<string, string>>(new Map());
-  useEffect(() => {
-    const m = new Map<string, string>();
-    for (const gid of draft.groupOrder) for (const r of draft.groups[gid] || []) m.set(r.examId, gid);
-    ownerRef.current = m;
-  }, [draft.groupOrder, draft.groups]);
-
-  const isInCurrent = (examId: string) => (draft.groups[activeGroup] || []).some((r) => r.examId === examId);
+  /* 소유 집합 */
+  const ownedBase = useMemo(
+    () => new Set((draft.base || []).map((r) => r.examId)),
+    [draft.base],
+  );
+  const isInBase = (id: string) => ownedBase.has(id);
 
   const toggleExam = (examId: string) => {
     const ex = allExams.find((x) => x.id === examId);
     setDraft((prev) => {
-      const next = structuredClone(prev) as DraftPackage;
-      // 다른 그룹에서 제거
-      next.groupOrder.forEach((gid) => {
-        if (gid !== activeGroup) next.groups[gid] = (next.groups[gid] || []).filter((r) => r.examId !== examId);
-      });
-      const here = next.groups[activeGroup] || [];
-      const idx = here.findIndex((r) => r.examId === examId);
-      if (idx >= 0) {
-        here.splice(idx, 1);
-        ownerRef.current.delete(examId);
-      } else {
-        here.push({ examId, name: ex?.name || "", sex: "A", code: codes[examId] || "" });
-        ownerRef.current.set(examId, activeGroup);
+      const exists = (prev.base || []).some((r) => r.examId === examId);
+      if (exists) {
+        return { ...prev, base: (prev.base || []).filter((r) => r.examId !== examId) };
       }
-      next.groups[activeGroup] = here;
-      return next;
+      const sexDefault = overrideMap[examId]?.sex ?? "A";
+      const codeDefault = codes[examId] || "";
+      return {
+        ...prev,
+        base: [
+          ...(prev.base || []),
+          { examId, sex: sexDefault, code: codeDefault, name: ex?.name || "" },
+        ],
+      };
     });
   };
 
-  const clearGroup = (gid: GroupId) => setDraft((prev) => ({ ...prev, groups: { ...prev.groups, [gid]: [] } }));
-  const updateRow = (gid: GroupId, examId: string, patch: Partial<GroupRow>) =>
+  const updateRow = (examId: string, patch: Partial<GroupRow>) =>
     setDraft((prev) => ({
       ...prev,
-      groups: { ...prev.groups, [gid]: (prev.groups[gid] || []).map((r) => (r.examId === examId ? { ...r, ...patch } : r)) },
+      base: (prev.base || []).map((r) => (r.examId === examId ? { ...r, ...patch } : r)),
     }));
-
-  // Addons
-  const [addonName, setAddonName] = useState("");
-  const [addonSex, setAddonSex] = useState<Sex | "ALL">("ALL");
-  const [addonPrice, setAddonPrice] = useState<string>("");
-  const addAddon = () => {
-    const price = Number((addonPrice || "").replace(/[^0-9]/g, "")) || 0;
-    if (!addonName.trim()) return;
-    setDraft((prev) => ({ ...prev, addons: [...prev.addons, { name: addonName.trim(), sex: addonSex, price }] }));
-    setAddonName("");
-    setAddonPrice("");
-  };
-  const removeAddon = (idx: number) => setDraft((prev) => ({ ...prev, addons: prev.addons.filter((_, i) => i !== idx) }));
 
   // 검증/저장
   const isValid = useMemo(() => {
     if (!draft.from || !draft.to) return false;
-    for (const gid of draft.groupOrder) if ((draft.groups[gid]?.length || 0) === 0) return false;
+    if ((draft.base?.length || 0) === 0) return false;
     return true;
   }, [draft]);
+
+  // 오버라이드 업서트
+  async function upsertOverridesFromDraft(d: DraftPackage) {
+    const rowUpdates = (d.base || []).map((r) => ({
+      examId: r.examId,
+      code: (r.code || codes[r.examId] || "").trim() || null,
+      sex: r.sex,
+    }));
+    // 코드만 입력된 항목도 반영
+    const codeOnly = Object.entries(codes)
+      .filter(([, v]) => (v || "").trim().length > 0)
+      .map(([examId, code]) => ({ examId, code, sex: null as Sex | null }));
+
+    // 중복 제거: rowUpdates 우선
+    const seen = new Set<string>();
+    const merged: { examId: string; code?: string | null; sex?: Sex | null }[] = [];
+    for (const u of [...rowUpdates, ...codeOnly]) {
+      if (seen.has(u.examId)) continue;
+      seen.add(u.examId);
+      merged.push(u);
+    }
+
+    if (!merged.length) return;
+    await fetch("/api/m/exams/overrides", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ updates: merged }),
+    }).catch(() => {});
+  }
 
   const saveDraft = async () => {
     if (!isValid) return;
@@ -385,87 +361,158 @@ export default function NHISPackagesPage() {
     const idx = next.findIndex((p) => p.id === draft.id);
     if (idx === -1) next.unshift(draft);
     else next[idx] = draft;
-    saveList(next);                  // 로컬 저장
-    await publishPackages(NS, next); // 이때만 서버 반영
-    saveCodes(codes);
-    setMode("list");
+
+    await withLock(async () => {
+      saveList(next);
+      await publishPackages(NS, next);
+      await upsertOverridesFromDraft(draft); // ← 전역 저장
+      await refreshFromDB();
+      saveCodes(codes); // 전역 코드맵 저장
+      setMode("list");
+    });
   };
 
-  /* ===== Render ===== */
-
-  // 목록
+  /* ================ Render ================ */
   if (mode === "list") {
     return (
       <div className="p-5 md:p-8 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-tight">
-            <span className="text-sky-600">공단검진</span> 패키지 등록
+            <span className="text-sky-600">공단(NHIS)</span> 패키지 등록
           </h1>
         </div>
-        <PackagesGrid
-          items={packages}
-          onAdd={() => {
-            setDraft(makeBlank());
-            setActiveGroup("base");
-            setActiveTab("builder");
-            setMode("edit");
-          }}
-          onEdit={(id) => {
-            const p = packages.find((x) => x.id === id)!;
-            setDraft(structuredClone(p));
-            setActiveGroup("base");
-            setActiveTab("builder");
-            setMode("edit");
-          }}
-          onClone={async (id) => {
-            const src = packages.find((x) => x.id === id)!;
-            const cp = structuredClone(src);
-            cp.id = `pkg_${Date.now()}`;
-            cp.name = `${src.name} 복제`;
-            const next = [cp, ...packages];
-            saveList(next);
-            await publishPackages(NS, next);
-          }}
-          onDelete={async (id) => {
-            if (!confirm("해당 패키지를 삭제하시겠습니까?")) return;
-            const next = packages.filter((x) => x.id !== id);
-            saveList(next);
-            await publishPackages(NS, next);
-          }}
-          onToggleShow={async (id, v) => {
-            const next = packages.map((p) => (p.id === id ? { ...p, showInBooking: v } : p));
-            saveList(next);
-            await publishPackages(NS, next);
-          }}
-        />
+
+        <section className={card}>
+          <div className={subHead}>등록된 공단(NHIS) 패키지</div>
+          <div className={body}>
+            <div className="mb-4 flex items-center justify-between">
+              <button className={btnPrimary} onClick={() => { setDraft(makeBlank()); setMode("edit"); }} disabled={busy}>
+                패키지 추가
+              </button>
+            </div>
+
+            {packages.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-400">아직 등록된 패키지가 없습니다.</div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {packages.map((p) => {
+                  const baseCount = p.base?.length ?? 0;
+                  return (
+                    <div key={p.id} className="rounded-xl border p-4 shadow-sm flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="text-base font-semibold truncate">{p.name}</div>
+                        <span
+                          className={clsx(
+                            "text-xs px-2 py-0.5 rounded-full border",
+                            p.showInBooking
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-gray-50 text-gray-600 border-gray-200",
+                          )}
+                        >
+                          {p.showInBooking ? "예약자 노출" : "미노출"}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-gray-500">{p.from || "-"} ~ {p.to || "-"}</div>
+
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-md">
+                          기본 {baseCount}
+                        </span>
+                        <span className="ml-auto font-medium">
+                          {(p.price || 0).toLocaleString()}원
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="accent-sky-600 scale-110"
+                            checked={p.showInBooking}
+                            onChange={async (e) => {
+                              const next = packages.map((x) => (x.id === p.id ? { ...x, showInBooking: e.target.checked } : x));
+                              await withLock(async () => {
+                                saveList(next);
+                                await publishPackages(NS, next);
+                                await refreshFromDB();
+                              });
+                            }}
+                            disabled={busy}
+                          />
+                          예약자페이지 노출
+                        </label>
+                        <div className="flex gap-2">
+                          <button className={btn} onClick={() => { setDraft(p); setMode("edit"); }} disabled={busy}>
+                            수정
+                          </button>
+                          <button
+                            className={btn}
+                            onClick={async () => {
+                              const cp = { ...p, id: crypto.randomUUID(), name: `${p.name} 복제` };
+                              const next = [cp, ...packages];
+                              await withLock(async () => {
+                                saveList(next);
+                                await publishPackages(NS, next);
+                                await refreshFromDB();
+                              });
+                            }}
+                            disabled={busy}
+                          >
+                            복제
+                          </button>
+                          <button
+                            className="px-3 py-2 rounded-lg text-sm border border-red-300 text-red-600 hover:bg-red-50"
+                            onClick={async () => {
+                              if (!confirm("해당 패키지를 삭제하시겠습니까?")) return;
+                              const next = packages.filter((x) => x.id !== p.id);
+                              await withLock(async () => {
+                                saveList(next);
+                                await publishPackages(NS, next);
+                                await refreshFromDB();
+                              });
+                            }}
+                            disabled={busy}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     );
   }
 
-  // 편집
+  // 편집 화면
   return (
     <div className="p-5 md:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">
-          <span className="text-sky-600">공단검진</span> 패키지 등록
+          <span className="text-sky-600">공단(NHIS)</span> 패키지 등록
         </h1>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              className="scale-110 accent-sky-600"
+              className="accent-sky-600 scale-110"
               checked={draft.showInBooking}
               onChange={(e) => setDraft({ ...draft, showInBooking: e.target.checked })}
             />
             예약자페이지 노출
           </label>
-          <button className={btn} onClick={() => setMode("list")}>
+          <button className={btn} onClick={() => setMode("list")} disabled={busy}>
             목록으로
           </button>
           <button
-            className={clsx(btnPrimary, !isValid && "cursor-not-allowed opacity-50")}
+            className={clsx(btnPrimary, !isValid && "opacity-50 cursor-not-allowed")}
             onClick={saveDraft}
-            disabled={!isValid}
+            disabled={!isValid || busy}
           >
             저장
           </button>
@@ -475,45 +522,66 @@ export default function NHISPackagesPage() {
       {/* 기본정보 */}
       <section className={card}>
         <div className={subHead}>패키지 기본 정보</div>
-        <div className={body + " grid grid-cols-1 gap-4 md:grid-cols-6"}>
+        <div className={body + " grid grid-cols-1 md:grid-cols-6 gap-4"}>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-semibold text-gray-600">패키지명</label>
-            <input className={input} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            <label className="block text-xs font-semibold text-gray-600 mb-1">패키지명</label>
+            <input
+              className={input}
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-600">표시 금액</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">표시 금액</label>
             <input
               className={clsx(input, "text-right")}
               inputMode="numeric"
               value={draft.price}
-              onChange={(e) => setDraft({ ...draft, price: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  price: Number(e.target.value.replace(/[^0-9]/g, "")) || 0,
+                })
+              }
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-600">유효 시작일</label>
-            <input type="date" className={input} value={draft.from || ""} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
+            <label className="block text-xs font-semibold text-gray-600 mb-1">유효 시작일</label>
+            <input
+              type="date"
+              className={input}
+              value={draft.from || ""}
+              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+            />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-600">유효 종료일</label>
-            <input type="date" className={input} value={draft.to || ""} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
+            <label className="block text-xs font-semibold text-gray-600 mb-1">유효 종료일</label>
+            <input
+              type="date"
+              className={input}
+              value={draft.to || ""}
+              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+            />
           </div>
         </div>
       </section>
 
       {/* 좌/우 */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* 좌: 목록 */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* 좌: 항목 검색/선택 */}
         <section className={clsx(card, "lg:col-span-5")}>
           <div className={subHead}>검사항목 리스트</div>
           <div className={body + " space-y-3"}>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {categories.map((c) => (
                 <button
                   key={c}
                   onClick={() => setCat(c)}
                   className={clsx(
-                    "rounded-full border px-3 py-1.5 text-xs transition",
-                    c === cat ? "border-sky-600 bg-sky-600 text-white shadow-sm" : "border-gray-300 hover:bg-gray-50"
+                    "px-3 py-1.5 rounded-full text-xs border transition",
+                    c === cat
+                      ? "bg-sky-600 text-white border-sky-600 shadow-sm"
+                      : "border-gray-300 hover:bg-gray-50",
                   )}
                 >
                   {c}
@@ -528,22 +596,26 @@ export default function NHISPackagesPage() {
               />
             </div>
 
-            {loading && <div className="text-sm text-gray-500">엑셀을 불러오는 중…</div>}
-            {excelErr && <div className="text-sm text-red-600">엑셀 오류: {excelErr}</div>}
+            {loading && <div className="text-gray-500 text-sm">엑셀을 불러오는 중…</div>}
+            {excelErr && <div className="text-red-600 text-sm">엑셀 오류: {excelErr}</div>}
 
             <div className="max-h-[65vh] overflow-y-auto pr-1">
               {filtered.map((e) => {
-                const selected = isInCurrent(e.id);
+                const selected = isInBase(e.id);
                 return (
                   <div
                     key={e.id}
                     className={clsx(
-                      "mb-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 transition",
-                      selected ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200"
+                      "w-full rounded-lg border px-3 py-2 mb-2 transition flex items-center gap-2",
+                      selected ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200",
                     )}
                   >
-                    <button className="flex-1 text-left hover:opacity-80" onClick={() => toggleExam(e.id)}>
+                    <button
+                      className="flex-1 text-left hover:opacity-80"
+                      onClick={() => toggleExam(e.id)}
+                    >
                       <div className="truncate text-sm">{e.name}</div>
+                      <div className="truncate text-[11px] text-gray-500">{e.detail}</div>
                     </button>
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] text-gray-500">코드</span>
@@ -561,203 +633,80 @@ export default function NHISPackagesPage() {
           </div>
         </section>
 
-        {/* 우: 빌더/추가검사 */}
+        {/* 우: 빌더 */}
         <section className={clsx(card, "lg:col-span-7")}>
-          <div className="flex items-center gap-2 px-6 pt-4">
-            <button
-              className={clsx(
-                "rounded-full border px-3 py-1.5 text-sm",
-                activeTab === "builder" ? "border-gray-900 bg-gray-900 text-white" : "hover:bg-gray-50"
-              )}
-              onClick={() => setActiveTab("builder")}
+          <div className={subHead}>패키지 빌더 (기본 항목)</div>
+
+          <div className="px-6 mt-4">
+            <div
+              className="text-[11px] text-gray-500 grid items-center gap-2 mb-2"
+              style={{
+                gridTemplateColumns:
+                  "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px",
+              }}
             >
-              패키지 빌더
-            </button>
-            <button
-              className={clsx(
-                "rounded-full border px-3 py-1.5 text-sm",
-                activeTab === "addons" ? "border-gray-900 bg-gray-900 text-white" : "hover:bg-gray-50"
-              )}
-              onClick={() => setActiveTab("addons")}
-            >
-              추가검사 등록
-            </button>
+              <span>검사명</span>
+              <span>성별</span>
+              <span>비고</span>
+              <span>코드</span>
+              <span> </span>
+            </div>
           </div>
 
-          {activeTab === "builder" ? (
-            <>
-              <div className="flex flex-wrap items-center gap-3 px-6 pt-4">
-                <div className="inline-flex rounded-full bg-gray-100 p-1">
-                  {draft.groupOrder.map((gid) => {
-                    const m = meta(gid);
-                    const active = gid === activeGroup;
-                    const color =
-                      m.color === "sky"
-                        ? active
-                          ? "bg-sky-600 text-white"
-                          : "text-gray-600 hover:text-gray-900"
-                        : active
-                        ? "bg-slate-700 text-white"
-                        : "text-gray-600 hover:text-gray-900";
-                    return (
-                      <button
-                        key={gid}
-                        className={clsx("px-4 py-2 text-sm transition", "rounded-full", color)}
-                        onClick={() => setActiveGroup(gid)}
-                      >
-                        {m.label} {count(gid)}건
-                        {typeof m.chooseCount === "number" ? ` · 필수 ${m.chooseCount}` : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button className={btn} onClick={addGroup}>
-                  + 그룹 추가
-                </button>
-                {activeGroup !== "base" && (
-                  <>
-                    <div className="flex items-center gap-1 text-sm">
-                      <span className="text-gray-600">필수 선택</span>
-                      <input
-                        type="number"
-                        min={0}
-                        className={clsx(inputSm, "w-[70px]")}
-                        value={meta(activeGroup).chooseCount ?? 1}
-                        onChange={(e) => setChooseCount(activeGroup, parseInt(e.target.value || "0", 10))}
-                      />
-                      <span className="text-gray-600">개</span>
-                    </div>
-                    <button
-                      className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                      onClick={() => removeGroup(activeGroup)}
+          <div className="px-6 pb-6 max-h-[60vh] overflow-y-auto">
+            {(draft.base || []).length === 0 ? (
+              <div className="py-12 text-center text-gray-400 border rounded-xl">
+                좌측 목록에서 항목을 클릭해 추가해 주세요.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {draft.base.map((row) => (
+                  <div
+                    key={row.examId}
+                    className="rounded-lg border border-gray-200 px-3 py-2 grid items-center gap-2 min-h-[40px]"
+                    style={{
+                      gridTemplateColumns:
+                        "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px",
+                    }}
+                  >
+                    <div className="truncate font-medium pr-2">{row.name || "검사명"}</div>
+                    <select
+                      className={inputSm}
+                      value={row.sex}
+                      onChange={(e) => updateRow(row.examId, { sex: e.target.value as Sex })}
                     >
-                      현재 그룹 삭제
+                      <option value="A">전체</option>
+                      <option value="M">남</option>
+                      <option value="F">여</option>
+                    </select>
+                    <input
+                      className={inputSm}
+                      placeholder="비고"
+                      value={row.memo || ""}
+                      onChange={(e) => updateRow(row.examId, { memo: e.target.value })}
+                    />
+                    <input
+                      className={inputSm}
+                      placeholder="코드"
+                      value={row.code || ""}
+                      onChange={(e) => setCode(row.examId, e.target.value)}
+                    />
+                    <button
+                      className="text-xs text-gray-500 hover:text-gray-900 px-2"
+                      onClick={() => toggleExam(row.examId)}
+                    >
+                      삭제
                     </button>
-                  </>
-                )}
-                <div className="flex-1" />
-                <button
-                  className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                  onClick={() => clearGroup(activeGroup)}
-                >
-                  전체 비우기
-                </button>
-              </div>
-
-              <div className="px-6 pt-4">
-                <div
-                  className="mb-2 grid items-center gap-2 text-[11px] text-gray-500"
-                  style={{ gridTemplateColumns: "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px" }}
-                >
-                  <span>검사명</span>
-                  <span>성별</span>
-                  <span>비고</span>
-                  <span>코드</span>
-                  <span> </span>
-                </div>
-              </div>
-
-              <div className="max-h-[60vh] overflow-y-auto px-6 pb-6">
-                {(draft.groups[activeGroup] || []).length === 0 ? (
-                  <div className="rounded-xl border py-12 text-center text-gray-400">좌측 목록에서 항목을 클릭해 추가해 주세요.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {(draft.groups[activeGroup] || []).map((row) => (
-                      <div
-                        key={row.examId}
-                        className="grid min-h-[40px] items-center gap-2 rounded-lg border border-gray-200 px-3 py-2"
-                        style={{ gridTemplateColumns: "minmax(220px,1fr) 88px minmax(220px,1fr) 120px 48px" }}
-                      >
-                        <div className="truncate pr-2 font-medium">{row.name || "검사명"}</div>
-                        <select
-                          className={inputSm}
-                          value={row.sex}
-                          onChange={(e) => updateRow(activeGroup, row.examId, { sex: e.target.value as Sex })}
-                        >
-                          <option value="A">전체</option>
-                          <option value="M">남</option>
-                          <option value="F">여</option>
-                        </select>
-                        <input
-                          className={inputSm}
-                          placeholder="비고"
-                          value={row.memo || ""}
-                          onChange={(e) => updateRow(activeGroup, row.examId, { memo: e.target.value })}
-                        />
-                        <input
-                          className={inputSm}
-                          placeholder="코드"
-                          value={row.code || ""}
-                          onChange={(e) => setCode(row.examId, e.target.value)}
-                        />
-                        <button className="px-2 text-xs text-gray-500 hover:text-gray-900" onClick={() => toggleExam(row.examId)}>
-                          삭제
-                        </button>
-                      </div>
-                    ))}
                   </div>
-                )}
+                ))}
               </div>
-            </>
-          ) : (
-            /* 추가검사 탭 */
-            <div className="space-y-4 p-6">
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">항목명</label>
-                  <input className={input} value={addonName} onChange={(e) => setAddonName(e.target.value)} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">성별</label>
-                  <select className={inputSm} value={addonSex} onChange={(e) => setAddonSex(e.target.value as any)}>
-                    <option value="ALL">전체</option>
-                    <option value="M">남</option>
-                    <option value="F">여</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">비용(원)</label>
-                  <input
-                    className={clsx(inputSm, "w-[140px] text-right")}
-                    inputMode="numeric"
-                    value={addonPrice}
-                    onChange={(e) => setAddonPrice(e.target.value)}
-                  />
-                </div>
-                <button className={btn} onClick={addAddon}>
-                  추가
-                </button>
-              </div>
-
-              <div className="mt-4 overflow-hidden rounded-xl border">
-                <div className="grid grid-cols-12 gap-0 bg-gray-50 px-3 py-2 text-xs">
-                  <div className="col-span-7">항목명</div>
-                  <div className="col-span-2">성별</div>
-                  <div className="col-span-2 text-right">비용</div>
-                  <div className="col-span-1" />
-                </div>
-                {draft.addons.length === 0 ? (
-                  <div className="px-3 py-6 text-sm text-gray-400">등록된 추가검사가 없습니다.</div>
-                ) : (
-                  draft.addons.map((a, i) => (
-                    <div key={i} className="grid grid-cols-12 items-center gap-0 border-t px-3 py-2 text-sm">
-                      <div className="col-span-7">{a.name}</div>
-                      <div className="col-span-2">{a.sex === "ALL" ? "전체" : a.sex === "M" ? "남" : "여"}</div>
-                      <div className="col-span-2 text-right">{(a.price || 0).toLocaleString()}원</div>
-                      <div className="col-span-1 text-right">
-                        <button className="text-xs text-gray-500 hover:text-red-600" onClick={() => removeAddon(i)}>
-                          삭제
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </section>
       </div>
     </div>
   );
 }
+
+
 

@@ -21,10 +21,25 @@ const NAV_GROUPS: { group: string; items: { label: string; href: string }[] }[] 
   { group: "알림", items: [{ label: "알림함", href: "/m/notifications" }] },
 ];
 
-function resolveHospitalName() {
+// 병원명 해석: DB(hid) → 쿠키 후보 → 폴백
+async function getHospitalName(session: any): Promise<string> {
   const ck = cookies();
-  const keys = ["hospitalName", "orgName", "x-hospital-name", "x-org-name", "mediswich_org_name"];
-  for (const k of keys) {
+  const hid =
+    ck.get("current_hospital_id")?.value ||
+    session?.hid ||
+    session?.hospitalId ||
+    "";
+
+  if (hid) {
+    const org = await prisma.hospital.findUnique({
+      where: { id: hid },
+      select: { name: true },
+    });
+    if (org?.name) return org.name;
+  }
+
+  const nameKeys = ["hospitalName", "orgName", "x-hospital-name", "x-org-name", "mediswich_org_name"];
+  for (const k of nameKeys) {
     const v = ck.get(k)?.value;
     if (v) return decodeURIComponent(v);
   }
@@ -48,7 +63,7 @@ export default async function Layout({ children }: { children: ReactNode }) {
   const me = await prisma.user.findUnique({ where: { id: s.sub }, select: { mustChangePassword: true } });
   if (me?.mustChangePassword) redirect("/m/me/change-password?first=1");
 
-  const hospitalName = resolveHospitalName();
+  const hospitalName = await getHospitalName(s);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50">

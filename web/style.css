@@ -1,8 +1,8 @@
 /* =====================================================
-CSS File: style.css (Definitive Final Version - UI/UX Refined)
-Purpose: All-in-one styles with mobile layout fixes and UX improvements.
-Date: 2025-10-24 (Final Polish v12 - Mobile Clip & Animation Fix)
-===================================================== */
+   CSS File: style.css (MediSwich Ultimate Final Version)
+   Purpose: All-in-one styles including fixed legal page.
+   Date: 2025-10-24 (Final Polish with Legal Fix)
+   ===================================================== */
 
 /* -------------------- 0. 기본 설정 및 변수 -------------------- */
 :root {
@@ -153,9 +153,6 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
 .icon-circle { width: 65px; height: 65px; background: linear-gradient(135deg, var(--color-primary), #005bb5); color: var(--color-background); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 2rem; margin: 0 auto 25px; box-shadow: 0 5px 15px rgba(0, 112, 243, 0.25); transition: transform 0.4s var(--transition-smooth); }
 .value-card-new.hover-effect:hover .icon-circle { transform: rotate(5deg) scale(1.08); }
 
-/* -------------------- 7. [삭제됨] 서비스 비교 섹션 (중복 코드 제거) -------------------- */
-/* 21번 섹션으로 이동 및 개편되었습니다. */
-
 /* -------------------- 8. ABOUT 페이지 스타일 -------------------- */
 .about-section { padding: 80px 0; overflow: hidden; }
 .intro-section { background-color: var(--color-light-gray); }
@@ -170,8 +167,6 @@ section h2 { text-align: center; margin-bottom: 60px; padding-top: 10px; positio
 .vision-text ul { list-style: none; padding-left: 0; margin-top: 25px; }
 .vision-text li { margin-bottom: 10px; font-weight: var(--font-weight-medium); }
 .vision-text .bullet { color: var(--color-secondary); font-weight: var(--font-weight-bold); margin-right: 8px; }
-
-/* -------------------- 10. FEATURES 페이지 스타일 (해당 파일로 이동) -------------------- */
 
 /* -------------------- 11. 기술력 및 신뢰 섹션 -------------------- */
 .reviews-section { background-color: var(--color-section-bg); padding-top: 80px; overflow: hidden; }
@@ -375,7 +370,6 @@ details[open] > summary.faq-question { background-color: var(--color-background)
     .comparison-card { padding: 25px 20px; } /* 더 작은 화면 패딩 */
     .comparison-visual { min-height: 200px; }
 }
-/* -------------------- 18. 브랜드 아이덴티티 섹션 (삭제됨) -------------------- */
 
 /* -------------------- 19. Hero 체크 아이콘 스타일 -------------------- */
 .trust-icons .check-icon {
@@ -444,7 +438,6 @@ details[open] > summary.faq-question { background-color: var(--color-background)
 }
 
 /* --- 21. [개편됨] 정적 비교 섹션 (박스형 디자인) --- */
-
 .comparison-section-static {
     background-color: var(--color-background);
     overflow: hidden; /* 내부 애니메이션 요소 잘림 방지 */
@@ -518,7 +511,6 @@ details[open] > summary.faq-question { background-color: var(--color-background)
 
 /* 시각 자료 영역 */
 .comparison-visual {
-    /* height: 300px; <- 고정 높이 제거 */
     min-height: 300px; /* 최소 높이 설정 (데스크탑) */
     aspect-ratio: 4 / 3; /* 비율 유지 */
     border-radius: 10px;
@@ -593,4 +585,118 @@ details[open] > summary.faq-question { background-color: var(--color-background)
 .after-design .dash-content-box.small { height: 45px; display: inline-block; width: calc(50% - 6px); }
 .after-design .dash-content-box.small:first-of-type { margin-right: 12px; }
 
-/* --- 21-END. 정적 비교 섹션 --- */
+/* ==========================================================================
+   [FINAL FIX] Legal Page Specific Styles (MediSwitch SaaS)
+   글로벌 마케팅 스타일 충돌 방지 및 전문적인 법률 문서 스타일 적용
+   ========================================================================== */
+
+/* 1. 레이아웃 및 컨테이너 재설정 */
+body.legal-page {
+    background-color: #f5f7fa !important;
+}
+
+body.legal-page .legal-container {
+    max-width: 860px !important;
+    margin: 60px auto 100px !important;
+    background-color: #ffffff !important;
+    padding: 60px 80px !important;
+    border-radius: 16px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05) !important;
+    text-align: left !important; /* 강제 좌측 정렬 */
+}
+
+/* 2. 글로벌 스타일 충돌 방지 (가장 중요한 패치) */
+/* 마케팅용 section의 거대한 패딩(100px)을 법률 페이지에서만 제거합니다 */
+body.legal-page .legal-content section {
+    padding: 0 !important;
+    margin-bottom: 40px !important; /* 조항 간 적절한 간격 유지 */
+    text-align: left !important; /* 섹션 내부 강제 좌측 정렬 */
+}
+
+/* 마케팅용 h2 가운데 정렬을 법률 페이지에서만 해제합니다 */
+body.legal-page section h2,
+body.legal-page .legal-article-title {
+    text-align: left !important;
+    margin-bottom: 16px !important;
+    padding-top: 0 !important;
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #222 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* 3. 법률 문서 헤더(제목) 스타일 */
+body.legal-page .legal-header {
+    text-align: left !important;
+    margin-bottom: 50px !important;
+    padding-bottom: 24px !important;
+    border-bottom: 2px solid #222 !important;
+}
+
+body.legal-page .legal-title {
+    font-size: 34px !important;
+    font-weight: 800 !important;
+    color: #111 !important;
+    margin-bottom: 12px !important;
+    line-height: 1.2 !important;
+    text-align: left !important;
+}
+
+body.legal-page .legal-date {
+    font-size: 15px !important;
+    color: #666 !important;
+    margin: 0 !important;
+    text-align: left !important;
+}
+
+/* 4. 본문 타이포그래피 최적화 (가독성 강화) */
+body.legal-page .legal-content p,
+body.legal-page .legal-content li {
+    font-size: 16px !important;
+    line-height: 1.75 !important; /* 읽기 편한 줄간격 */
+    color: #444 !important;
+    margin-bottom: 12px !important;
+    text-align: left !important;
+    word-break: keep-all !important; /* 한글 단어 잘림 방지 */
+}
+
+/* 리스트 스타일 정돈 */
+body.legal-page .legal-content ul,
+body.legal-page .legal-content ol {
+    padding-left: 24px !important;
+    margin-top: 8px !important;
+    margin-bottom: 24px !important;
+    text-align: left !important;
+}
+
+body.legal-page .legal-content li {
+    margin-bottom: 8px !important;
+}
+
+/* 강조 텍스트 */
+body.legal-page .legal-content strong {
+    font-weight: 700 !important;
+    color: #111 !important;
+    background-color: rgba(0, 112, 243, 0.05); /* 살짝 강조된 배경색 추가 */
+    padding: 0 4px;
+}
+
+/* 5. 모바일 반응형 최적화 */
+@media (max-width: 768px) {
+    body.legal-page .legal-container {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 40px 24px 80px !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    body.legal-page .legal-title {
+        font-size: 26px !important;
+    }
+
+    body.legal-page .legal-article-title {
+        font-size: 20px !important;
+        margin-top: 30px !important; /* 모바일에서 조항 간 구분을 더 명확히 */
+    }
+}
