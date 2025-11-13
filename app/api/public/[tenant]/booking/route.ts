@@ -1,3 +1,4 @@
+// app/api/public/[tenant]/booking/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -197,7 +198,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
     } = body || {};
 
     if (!packageId || !name || !phone || !datetime) {
-      return NextResponse.json({ error: "invalid payload" }, { status: 400 });
+      return NextResponse.json({ error: "invalid payload", code: "INVALID" }, { status: 400 });
     }
 
     const pkg = await runAs(hospitalId, () =>
@@ -209,7 +210,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
     if (!pkg) return NextResponse.json({ error: "package not found" }, { status: 404 });
 
     const dt = parseYMD_HHMM(String(datetime));
-    if (!dt) return NextResponse.json({ error: "invalid datetime" }, { status: 400 });
+    if (!dt) return NextResponse.json({ error: "invalid datetime", code: "INVALID" }, { status: 400 });
 
     const dayStart = new Date(dt.date.getFullYear(), dt.date.getMonth(), dt.date.getDate(), 0, 0, 0, 0);
     const nextStart = new Date(dt.date.getFullYear(), dt.date.getMonth(), dt.date.getDate() + 1, 0, 0, 0, 0);
@@ -286,7 +287,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
 
     const snapIn = examSnapshot ?? {};
 
-    // ---- 여기부터: never[]/concat 문제 제거용 정규화 ----
+    // ---- 추가검사 정규화 ----
     const fromPayload: AddonIn[] = Array.isArray(addonsInRaw) ? (addonsInRaw as AddonIn[]) : [];
     const fromMeta: AddonIn[] = Array.isArray(metaIn?.addons) ? (metaIn.addons as AddonIn[]) : [];
     const fromSnapIds: AddonIn[] = Array.isArray(snapIn?.addonIds)
@@ -295,14 +296,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
     const fromSnapNames: AddonIn[] = Array.isArray(snapIn?.addons)
       ? (snapIn.addons as any[]).map((name) => String(name))
       : [];
-
-    const addonsMerged: AddonIn[] = [
-      ...fromPayload,
-      ...fromMeta,
-      ...fromSnapIds,
-      ...fromSnapNames,
-    ];
-    // ---------------------------------------------------
+    const addonsMerged: AddonIn[] = [...fromPayload, ...fromMeta, ...fromSnapIds, ...fromSnapNames];
 
     const { items: addonItems, total: addonsTotal } = addonsMerged.length
       ? await runAs(hospitalId, () => resolveAddons(hospitalId, clientIdFinal, addonsMerged))
@@ -319,11 +313,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
         );
       }
       if (Array.isArray(addonsMerged)) {
-        names.push(
-          ...addonsMerged
-            .filter((v: any) => typeof v === "string")
-            .map((v: any) => norm(v))
-        );
+        names.push(...addonsMerged.filter((v: any) => typeof v === "string").map((v: any) => norm(v)));
       }
       return Array.from(new Set(names.filter(Boolean)));
     })();
@@ -357,10 +347,7 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
       addonIds: Array.isArray((snapIn as any)?.addonIds) ? (snapIn as any).addonIds : [],
     };
 
-    const addonsForMeta = addonItems.length
-      ? addonItems
-      : fallbackAddonNames.map((n) => ({ name: n, priceKRW: 0 }));
-
+    const addonsForMeta = addonItems.length ? addonItems : fallbackAddonNames.map((n) => ({ name: n, priceKRW: 0 }));
     const addonsTotalForMeta = addonItems.length ? addonsTotal : 0;
 
     const metaOut: any = {
@@ -396,10 +383,17 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
       addonsTotalKRW: addonsTotalForMeta,
     };
 
-    const eff = pickEffectiveDate({ date: dayStart, meta: metaOut });
+    // pickEffectiveDate가 null을 반환할 수 있으므로 dayStart로 안전 폴백
+    const eff = (pickEffectiveDate({ date: dayStart, meta: metaOut }) ?? dayStart);
     metaOut.effectiveDate = toYMD(eff);
 
-    const idem = (req.headers.get("idempotency-key") || "").slice(0, 64);
+    // ── 멱등키: 'idempotency-key' 또는 'x-idempotency-key' 모두 허용
+    const idemHeader =
+      req.headers.get("idempotency-key") ||
+      req.headers.get("x-idempotency-key") ||
+      "";
+    const idem = idemHeader.slice(0, 64);
+
     if (idem) {
       const exist = await runAs(hospitalId, () =>
         prisma.booking.findFirst({
@@ -445,10 +439,9 @@ export async function POST(req: NextRequest, context: { params: { tenant: string
       { status: 201, headers: { "cache-control": "no-store" } }
     );
   } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
+    return NextResponse.json({ error: String(e?.message || e), code: "ERROR" }, { status: 500 });
   }
 }
-
 
 
 

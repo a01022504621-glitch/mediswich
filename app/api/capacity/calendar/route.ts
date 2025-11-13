@@ -112,6 +112,29 @@ async function resolveHospitalId(req: NextRequest): Promise<string | null> {
   }
 }
 
+// ── 기본 케파(BASIC) 읽기: CapacitySetting → CapacityDefault → 0 ───────────────
+async function getBasicDefaultCap(hospitalId: string): Promise<number> {
+  // new store
+  try {
+    const row = await prisma.capacitySetting.findUnique({
+      where: { hospitalId },
+      select: { defaults: true },
+    });
+    const n = Number((row as any)?.defaults?.BASIC ?? 0);
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch {}
+  // legacy fallback
+  try {
+    const cd = await prisma.capacityDefault.findUnique({
+      where: { hospitalId },
+      select: { basicCap: true },
+    });
+    const n = Number(cd?.basicCap ?? 0);
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch {}
+  return 0;
+}
+
 // ── 핸들러 ────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
@@ -201,6 +224,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 기본 케파 읽기
+    const basicDefault = await getBasicDefaultCap(hospitalId);
+
     // 응답
     const days: Record<
       YMD,
@@ -210,7 +236,10 @@ export async function GET(req: NextRequest) {
     for (let d = new Date(fromStart); d < toNextStart; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
       const iso = toYMD(d);
       const dow = d.getDay();
-      const cap = (capByDow[dow] ?? 0) > 0 ? capByDow[dow]! : 999;
+      // 정책: 기본 케파(BASIC) > 0이면 그 값을 우선, 0이면 템플릿 합계, 둘 다 없으면 999
+      const sumCap = Math.max(0, capByDow[dow] ?? 0);
+      const cap = basicDefault > 0 ? basicDefault : sumCap > 0 ? sumCap : 999;
+
       const used = usedByDay.get(iso) || 0;
       const set = closedMap.get(iso) || new Set<ResKey>();
       days[iso] = {
@@ -226,6 +255,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: e?.message || "INTERNAL" }, { status: 500 });
   }
 }
+
 
 
 

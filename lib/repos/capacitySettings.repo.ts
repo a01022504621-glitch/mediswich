@@ -9,7 +9,7 @@ import {
   zeroDefaults,
 } from "@/lib/types/capacity";
 
-// 정규화
+/* ================= normalize helpers ================= */
 function normDefaults(v: any): CapacityDefaults {
   const n = {
     BASIC: Number(v?.BASIC ?? 0),
@@ -37,7 +37,8 @@ function normSpecials(v: any): Specials {
   const itemsRaw = (v?.items ?? []) as any[];
   const labelsRaw = (v?.labels ?? []) as any[];
   const seen = new Set<string>();
-  const items = [];
+
+  const items: { id: string; name: string }[] = [];
   for (const it of itemsRaw) {
     const id = typeof it?.id === "string" ? it.id.trim() : "";
     const name = typeof it?.name === "string" ? it.name.trim() : "";
@@ -47,15 +48,17 @@ function normSpecials(v: any): Specials {
     items.push({ id, name });
     if (items.length >= 200) break;
   }
-  const labels = labelsRaw.filter((s: any) => typeof s === "string" && s.trim().length > 0).map((s: string) => s.trim());
+
+  const labels: string[] = labelsRaw
+    .filter((s: any) => typeof s === "string" && s.trim().length > 0)
+    .map((s: string) => s.trim());
+
   return { items, labels };
 }
 
 function normManaged(v: any): Managed {
   const b = (x: any) => (typeof x === "boolean" ? x : false);
-  const examsArr: string[] = Array.isArray(v?.exams)
-    ? (v.exams as any[]).map((x) => String(x))
-    : [];
+  const examsArr = Array.isArray(v?.exams) ? (v.exams as any[]).map((x) => String(x)) : [];
   const exams: string[] = Array.from(new Set(examsArr))
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -77,7 +80,7 @@ function toShape(row: any): CapacitySettingShape {
   };
 }
 
-// CapacityDefault → 초기값
+/* ================= defaults loader ================= */
 async function readCapacityDefault(hospitalId: string): Promise<CapacityDefaults> {
   const cd = await prisma.capacityDefault.findUnique({ where: { hospitalId } });
   return {
@@ -87,15 +90,16 @@ async function readCapacityDefault(hospitalId: string): Promise<CapacityDefaults
   };
 }
 
+/* ================= repo ================= */
 export const capacitySettingsRepo = {
-  // 읽기. 없으면 빈 구조 반환(쓰기 없음)
+  // 읽기. 없으면 CapacityDefault를 defaults로 채운 빈 구조 반환
   async get(hospitalId: string): Promise<CapacitySettingShape> {
     const row = await prisma.capacitySetting.findUnique({ where: { hospitalId } });
     if (!row) return { ...emptySetting, defaults: await readCapacityDefault(hospitalId) };
     return toShape(row);
   },
 
-  // 없으면 생성 후 반환. 생성 시 CapacityDefault 값 반영
+  // 없으면 생성 후 반환(CapacityDefault 반영)
   async getOrInit(hospitalId: string): Promise<CapacitySettingShape> {
     const defaults = await readCapacityDefault(hospitalId);
     const row = await prisma.capacitySetting.upsert({
@@ -116,8 +120,7 @@ export const capacitySettingsRepo = {
   async update(hospitalId: string, patch: Partial<CapacitySettingShape>): Promise<CapacitySettingShape> {
     const current = await this.getOrInit(hospitalId);
 
-    const nextDefaults =
-      patch.defaults ? normDefaults({ ...current.defaults, ...patch.defaults }) : current.defaults;
+    const nextDefaults = patch.defaults ? normDefaults({ ...current.defaults, ...patch.defaults }) : current.defaults;
 
     const nextExamDefaults = patch.examDefaults
       ? { ...current.examDefaults, ...normExamDefaults(patch.examDefaults) }
@@ -134,9 +137,7 @@ export const capacitySettingsRepo = {
         })()
       : current.specials;
 
-    const nextManaged = patch.managed
-      ? normManaged({ ...current.managed, ...patch.managed })
-      : current.managed;
+    const nextManaged = patch.managed ? normManaged({ ...current.managed, ...patch.managed }) : current.managed;
 
     const updated = await prisma.capacitySetting.update({
       where: { hospitalId },
@@ -150,7 +151,7 @@ export const capacitySettingsRepo = {
     return toShape(updated);
   },
 
-  // 개별 편의 메서드
+  // 편의 메서드
   async setDefaults(hospitalId: string, v: CapacityDefaults) {
     return this.update(hospitalId, { defaults: v });
   },
@@ -168,7 +169,7 @@ export const capacitySettingsRepo = {
   },
 };
 
-// 캘린더 기본치 조회용 헬퍼
+/* ================= public helper ================= */
 export async function readDefaultCapOrZero(hospitalId: string): Promise<CapacityDefaults> {
   const row = await prisma.capacitySetting.findUnique({ where: { hospitalId }, select: { defaults: true } });
   return row ? normDefaults(row.defaults) : await readCapacityDefault(hospitalId).catch(() => zeroDefaults);

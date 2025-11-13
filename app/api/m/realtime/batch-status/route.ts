@@ -24,7 +24,7 @@ function mapStatus(input?: string | null) {
   const KR: Record<string, string> = {
     "예약신청": "PENDING",
     "예약확정": "CONFIRMED",
-    "예약변경": "AMENDED",   // ← 추가
+    "예약변경": "AMENDED",
     "검진완료": "COMPLETED",
     "취소": "CANCELED",
     "검진미실시": "NO_SHOW",
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       where: { hospitalId: hid, id: { in: ids } },
       select: { id: true, status: true, meta: true, date: true },
     });
-    const byId = new Map(bookings.map(b => [b.id, b]));
+    const byId = new Map(bookings.map((b) => [b.id, b]));
 
     const tx: any[] = [];
 
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         );
       } else if (next === "AMENDED") {
         // 변경 표시: confirmedDate 유지, effectiveDate는 예약일/확정/완료 규칙으로 재산정
-        const eff = pickEffectiveDate({ date: cur.date, meta });
+        const eff = pickEffectiveDate({ date: cur.date, meta }) ?? cur.date; // ← null 폴백
         meta.effectiveDate = toYMD(eff);
         tx.push(
           prisma.booking.update({
@@ -134,10 +134,10 @@ export async function POST(req: NextRequest) {
           }),
         );
       } else {
-        // 그 외(PENDING/RESERVED/NO_SHOW/CANCELED) → 확정/완료일 제거
+        // 그 외(PENDING/RESERVED/NO_SHOW/CANCELED) → 확정/완료일 제거 후 효과일 재산정
         delete meta.confirmedDate;
         delete meta.completedDate;
-        const eff = pickEffectiveDate({ date: cur.date, meta });
+        const eff = pickEffectiveDate({ date: cur.date, meta }) ?? cur.date; // ← null 폴백
         meta.effectiveDate = toYMD(eff);
 
         tx.push(
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
         data: {
           hospitalId: hid,
           action: "BOOKING_BATCH_STATUS",
-          meta: { input: updates, updated: updated.map(x => x.id), skipped } as any,
+          meta: { input: updates, updated: updated.map((x) => x.id), skipped } as any,
         },
       });
     } catch {}
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       updated: updated.length,
-      updatedIds: updated.map(x => x.id),
+      updatedIds: updated.map((x) => x.id),
       skipped,
     });
   } catch (e: any) {

@@ -1,4 +1,4 @@
-// app/api/capacity/specials/route.ts  (GET + PUT)
+// app/api/capacity/settings/exam-defaults/route.ts  ← 새로 추가
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -6,8 +6,6 @@ export const revalidate = 0;
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma-scope";
 import { resolveHidStrict } from "@/lib/tenant/resolve-hid";
-
-type Special = { id: string; name: string };
 
 async function ensureRow(hospitalId: string) {
   const row = await prisma.capacitySetting.findUnique({ where: { hospitalId } });
@@ -28,45 +26,29 @@ export async function GET(req: NextRequest) {
   if (!hid) return NextResponse.json({ ok: false, error: "HOSPITAL_SCOPE_REQUIRED" }, { status: 400 });
 
   const row = await ensureRow(hid);
-  const items = ((row.specials as any)?.items as Special[] | undefined) ?? [];
-  return NextResponse.json(
-    { items },
-    { headers: { "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=120" } },
-  );
+  return NextResponse.json((row.examDefaults as any) ?? {}, { headers: { "Cache-Control": "no-store" } });
 }
 
-/** 특정검사 항목 저장: { items: [{id,name}], labels?: string[] } */
 export async function PUT(req: NextRequest) {
   const hid = await resolveHidStrict(req).catch(() => null);
   if (!hid) return NextResponse.json({ ok: false, error: "HOSPITAL_SCOPE_REQUIRED" }, { status: 400 });
 
-  const body = await req.json().catch(() => ({} as any));
+  const patch = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const row = await ensureRow(hid);
 
-  const next = { ...(row.specials as any) };
-  if (Array.isArray(body?.items)) {
-    const seen = new Set<string>();
-    const items: Special[] = [];
-    for (const it of body.items) {
-      const id = String((it as any)?.id ?? "").trim();
-      const name = String((it as any)?.name ?? "").trim();
-      if (!id || !name || seen.has(id)) continue;
-      seen.add(id);
-      items.push({ id, name });
-      if (items.length >= 200) break;
+  const next: Record<string, number> = { ...(row.examDefaults as any) };
+  if (patch && typeof patch === "object") {
+    for (const [k, v] of Object.entries(patch)) {
+      const n = Number(v as any);
+      if (Number.isFinite(n) && n >= 0) next[String(k)] = n;
     }
-    next.items = items;
-  }
-  if (Array.isArray(body?.labels)) {
-    next.labels = body.labels.map((s: any) => String(s)).filter(Boolean);
   }
 
-  await prisma.capacitySetting.update({
+  const updated = await prisma.capacitySetting.update({
     where: { hospitalId: hid },
-    data: { specials: next as any },
+    data: { examDefaults: next as any },
   });
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json((updated.examDefaults as any) ?? {}, { headers: { "Cache-Control": "no-store" } });
 }
 
 

@@ -97,14 +97,10 @@ function addMonths(d: Date, n: number) {
   r.setMonth(r.getMonth() + n);
   return r;
 }
+
+/* noStoreUrl: 타임스탬프 파라미터 추가 금지(중복요청 유발 방지) */
 function noStoreUrl(url: string) {
-  try {
-    const u = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://local");
-    u.searchParams.set("_", String(Date.now()));
-    return u.toString().replace(u.origin, "");
-  } catch {
-    return url + (url.includes("?") ? "&" : "?") + "_=" + Date.now();
-  }
+  return url;
 }
 
 /* 성별 */
@@ -226,8 +222,18 @@ export default function Page({ params }: { params: { tenant: string } }) {
   const monthAbortRef = useRef<AbortController | null>(null);
   const slotsAbortRef = useRef<AbortController | null>(null);
 
+  // 간단 스로틀: 동일 키에 대해 30초 내 재요청 차단(수동 새로고침은 예외)
+  const monthFetchStamp = useRef<{ key: string; at: number } | null>(null);
+  const slotFetchStamp = useRef<{ key: string; at: number } | null>(null);
+
   const loadMonth = useCallback(
-    async (ym: string) => {
+    async (ym: string, force = false) => {
+      const throttleMs = 30_000;
+      const key = `${params.tenant}:${ym}:${endoscopyFlags.hasEGD ? 1 : 0}:${endoscopyFlags.hasColo ? 1 : 0}`;
+      const now = Date.now();
+      if (!force && monthFetchStamp.current && monthFetchStamp.current.key === key && now - monthFetchStamp.current.at < throttleMs) return;
+      monthFetchStamp.current = { key, at: now };
+
       monthAbortRef.current?.abort();
       const ctl = new AbortController();
       monthAbortRef.current = ctl;
@@ -247,7 +253,13 @@ export default function Page({ params }: { params: { tenant: string } }) {
   );
 
   const loadSlots = useCallback(
-    async (dateKey: string) => {
+    async (dateKey: string, force = false) => {
+      const throttleMs = 15_000;
+      const key = `${params.tenant}:${dateKey}`;
+      const now = Date.now();
+      if (!force && slotFetchStamp.current && slotFetchStamp.current.key === key && now - slotFetchStamp.current.at < throttleMs) return;
+      slotFetchStamp.current = { key, at: now };
+
       slotsAbortRef.current?.abort();
       const ctl = new AbortController();
       slotsAbortRef.current = ctl;
@@ -270,8 +282,8 @@ export default function Page({ params }: { params: { tenant: string } }) {
   useEffect(() => {
     if (stepKey !== "date") return;
     const refresh = () => {
-      loadMonth(yyyymm(form.date));
-      loadSlots(ymdKey(form.date));
+      loadMonth(yyyymm(form.date), true); // 수동/포커스 갱신은 스로틀 무시
+      loadSlots(ymdKey(form.date), true);
     };
     const onVis = () => {
       if (document.visibilityState === "visible") refresh();
@@ -479,8 +491,8 @@ export default function Page({ params }: { params: { tenant: string } }) {
             t={t}
             onMonthChange={(ym) => loadMonth(ym)}
             onRefresh={() => {
-              loadMonth(yyyymm(form.date));
-              loadSlots(ymdKey(form.date));
+              loadMonth(yyyymm(form.date), true); // 수동 새로고침은 강제
+              loadSlots(ymdKey(form.date), true);
             }}
           />
         )}
@@ -1240,8 +1252,9 @@ async function fetchCapacityMonthSmart(
   const to = `${yStr}-${pad2(m)}-${pad2(last)}`;
 
   if (!flags.needEGD && !flags.needCol) {
-    const url = noStoreUrl(`/api/public/${tenant}/capacity?month=${yStr}-${pad2(m)}`);
-    const res = await fetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal });
+    const url = `/api/public/${tenant}/capacity?month=${yStr}-${pad2(m)}`;
+    // 월 단위는 브라우저 캐시/ETag 활용: cache 옵션 생략
+    const res = await fetch(url, { headers: { accept: "application/json" }, signal });
     if (!res.ok) throw new Error("capacity error");
     const j = await res.json();
     const raw: any = j?.days ?? j;
@@ -1252,7 +1265,7 @@ async function fetchCapacityMonthSmart(
 
   const resKeys = ["basic"].concat(flags.needEGD ? ["egd"] : []).concat(flags.needCol ? ["col"] : []);
   const url = `/api/public/${tenant}/capacity?` + new URLSearchParams({ from, to, resources: resKeys.join(",") }).toString();
-  const r = await fetch(noStoreUrl(url), { cache: "no-store", headers: { accept: "application/json" }, signal });
+  const r = await fetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal });
   if (!r.ok) throw new Error("capacity detail error");
   const jd = await r.json();
   const days = (jd?.days || {}) as Record<string, Partial<Record<string, { cap: number; used: number; closed?: boolean }>>>;
@@ -1272,7 +1285,7 @@ async function fetchSlots(tenant: string, ymd: string, signal?: AbortSignal): Pr
   const urls = [`/api/public/${tenant}/timeslots?date=${ymd}`, `/api/public/${tenant}/capacity?date=${ymd}`];
   for (const u of urls) {
     try {
-      const r = await fetch(noStoreUrl(u), { cache: "no-store", headers: { accept: "application/json" }, signal });
+      const r = await fetch(u, { cache: "no-store", headers: { accept: "application/json" }, signal });
       if (!r.ok) continue;
       const j = await r.json();
       const raw: any[] = Array.isArray(j?.slots) ? j.slots : Array.isArray(j?.times) ? j.times : Array.isArray(j) ? j : [];
@@ -1311,7 +1324,7 @@ function makeIdemKey() {
 async function createBooking(payload: any): Promise<{ ok: boolean; msg?: string }> {
   try {
     const key = makeIdemKey();
-    const res = await fetch(noStoreUrl(`/api/public/${payload.tenant}/booking`), {
+    const res = await fetch(`/api/public/${payload.tenant}/booking`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1441,6 +1454,7 @@ function buildBookingPayload(
     survey: form.survey || {},
   };
 }
+
 
 
 

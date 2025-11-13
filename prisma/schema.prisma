@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")        // 런타임(풀러) 연결
+  directUrl         = env("DIRECT_URL")          // 마이그레이션용 직접 연결
 }
 
 /**
@@ -27,7 +28,7 @@ enum BookingStatus {
   PENDING
   RESERVED
   CONFIRMED
-  AMENDED   // ← 추가: 확정 후 변경 표시
+  AMENDED   // 확정 후 변경 표시
   COMPLETED
   CANCELED
   NO_SHOW
@@ -311,10 +312,16 @@ model Booking {
   patientBirth    String?
   sex             Sex?
 
-  code             String        @default(cuid())
-  status           BookingStatus @default(RESERVED)
-  meta             Json?
-  idempotencyKey   String?       @db.VarChar(64) @unique
+  code           String        @default(cuid())
+  status         BookingStatus @default(RESERVED)
+  meta           Json?
+  idempotencyKey String?       @db.VarChar(64) @unique
+
+  // 이벤트 타임스탬프(대시보드 집계 최적화용; 선택)
+  requestedAt DateTime?
+  confirmedAt DateTime?
+  amendedAt   DateTime?
+  completedAt DateTime?
 
   // 변경 이력
   changeLogs BookingChangeLog[]
@@ -323,9 +330,24 @@ model Booking {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@unique([hospitalId, code])
+
+  // 기본 인덱스
   @@index([hospitalId, date])
   @@index([hospitalId, date, time])
   @@index([hospitalId, effectiveDate])
+
+  // 대시보드 가속 인덱스
+  @@index([hospitalId, createdAt])                 // 신청(요청) 기준
+  @@index([hospitalId, packageId, createdAt])      // 상위 패키지
+  @@index([hospitalId, companyId, createdAt])      // 고객사 매출 순위
+  @@index([hospitalId, status, createdAt])         // 상태별 추세
+  @@index([hospitalId, sex, createdAt])            // 성별 분포
+
+  // 이벤트 타임스탬프 기반 조회
+  @@index([hospitalId, requestedAt])
+  @@index([hospitalId, confirmedAt])
+  @@index([hospitalId, amendedAt])
+  @@index([hospitalId, completedAt])
 }
 
 /**
@@ -504,5 +526,7 @@ model Invoice {
 
   @@index([hospitalId, issuedAt])
 }
+
+
 
 

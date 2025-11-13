@@ -1,53 +1,85 @@
+// app/api/m/dashboard/trends/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// app/api/m/dashboard/trends/route.ts
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma-scope";
+
+import { NextRequest, NextResponse } from "next/server";
+import prisma, { runAs } from "@/lib/prisma-scope";
 import { requireSession } from "@/lib/auth/guard";
+import {
+  startOfDay,
+  addDays,
+  parseYMD,
+  formatYMD,
+  rangeDays,
+  weekStartMonday,
+  groupKeyDay,
+  groupKeyWeek,
+} from "@/lib/metrics/date";
 
- 
+type Gran = "day" | "week";
+const ACTIVE: Array<"PENDING" | "RESERVED" | "CONFIRMED"> = ["PENDING", "RESERVED", "CONFIRMED"];
 
-function dayRange(d: Date) {
-  const s = new Date(d); s.setHours(0, 0, 0, 0);
-  const e = new Date(d); e.setHours(23, 59, 59, 999);
-  return { s, e };
-}
+export async function GET(req: NextRequest) {
+  try {
+    const s = await requireSession();
+    const hospitalId = s.hid ?? (s as any).hospitalId;
+    if (!hospitalId) return NextResponse.json({ ok: false, error: "HOSPITAL_SCOPE_REQUIRED" }, { status: 401 });
 
-export async function GET() {
-  const s = await requireSession();
-  const hid = s.hid as string | undefined;
-  if (!hid) return NextResponse.json({ labels: [], series: [] });
+    const url = new URL(req.url);
+    const fromStr = (url.searchParams.get("from") || "").trim();
+    const toStr = (url.searchParams.get("to") || "").trim();
+    const gran = ((url.searchParams.get("gran") || "day").trim() as Gran) || "day";
 
-  const days = 14;
-  const labels: string[] = [];
-  const requested: number[] = [];
-  const confirmed: number[] = [];
-  const canceled: number[] = [];
+    const from = parseYMD(fromStr) ?? startOfDay(addDays(new Date(), -13));
+    const to = addDays(parseYMD(toStr) ?? startOfDay(new Date()), 1);
 
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const { s: ds, e: de } = dayRange(d);
-    labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+    const rows = await runAs(hospitalId, () =>
+      prisma.booking.findMany({
+        where: {
+          hospitalId,
+          OR: [
+            { effectiveDate: { gte: from, lt: to } },
+            { createdAt: { gte: from, lt: to } },
+          ],
+        },
+        select: { id: true, status: true, createdAt: true, effectiveDate: true, packageId: true },
+      }),
+    );
 
-    const [r, c, ca] = await Promise.all([
-      prisma.booking.count({ where: { hospitalId: hid, status: "PENDING",   date: { gte: ds, lte: de } } }),
-      prisma.booking.count({ where: { hospitalId: hid, status: "CONFIRMED", date: { gte: ds, lte: de } } }),
-      prisma.booking.count({ where: { hospitalId: hid, status: "CANCELED",  date: { gte: ds, lte: de } } }),
-    ]);
+    const keyFn = gran === "week" ? groupKeyWeek : groupKeyDay;
+    const buckets = new Map<string, { requested: number; active: number; confirmed: number; canceled: number }>();
 
-    requested.push(r);
-    confirmed.push(c);
-    canceled.push(ca);
+    // seed buckets for full range
+    const days = rangeDays(startOfDay(from), addDays(startOfDay(to), -1));
+    for (const d of days) buckets.set(keyFn(d), { requested: 0, active: 0, confirmed: 0, canceled: 0 });
+
+    for (const b of rows) {
+      // requested by createdAt
+      const kr = keyFn(startOfDay(b.createdAt));
+      const r = buckets.get(kr);
+      if (r) r.requested += 1;
+
+      // status by effectiveDate
+      const dEff = b.effectiveDate ? startOfDay(b.effectiveDate) : null;
+      if (dEff && dEff >= from && dEff < to) {
+        const k = keyFn(dEff);
+        const box = buckets.get(k);
+        if (!box) continue;
+        if (b.status === "CANCELED") box.canceled += 1;
+        if (b.status === "CONFIRMED" || b.status === "COMPLETED" || b.status === "AMENDED") box.confirmed += 1;
+        if (ACTIVE.includes(b.status as any)) box.active += 1;
+      }
+    }
+
+    const data = Array.from(buckets.entries())
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([k, v]) => ({ key: k, ...v }));
+
+    return NextResponse.json({ ok: true, gran, data }, { headers: { "Cache-Control": "no-store" } });
+  } catch (e: any) {
+    console.error(e);
+    return NextResponse.json({ ok: false, error: e?.message || "INTERNAL" }, { status: 500 });
   }
-
-  return NextResponse.json({
-    labels,
-    series: [
-      { name: "요청", data: requested },
-      { name: "확정", data: confirmed },
-      { name: "취소", data: canceled },
-    ],
-  });
 }
 

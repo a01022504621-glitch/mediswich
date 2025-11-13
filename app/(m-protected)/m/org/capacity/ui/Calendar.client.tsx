@@ -16,18 +16,17 @@ const formatMonthLabel = (ym: string) => {
   const d = ymToDate(ym);
   return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}`;
 };
-const ymd = (d: Date) =>
-  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 /* ───────── types ───────── */
 type YMD = `${number}-${number}-${number}`;
 type ClosedMap = Record<string, boolean>;
 type DayBox = {
-  cap: number;           // legacy per-day 기본 cap
-  used: number;          // legacy per-day 기본 used
+  cap: number;
+  used: number;
   closed: ClosedMap;
-  caps?: Record<string, number>;   // optional per-resource cap
-  usedBy?: Record<string, number>; // optional per-resource used
+  caps?: Record<string, number>;
+  usedBy?: Record<string, number>;
 };
 type SpecItem = { id: string; name: string };
 
@@ -52,24 +51,17 @@ const lsSet = (k: string, v: string) => {
 async function getCalendar(month: string) {
   const r = await fetch(`/api/capacity/calendar?month=${month}`, { cache: "no-store" });
   const j = await r.json().catch(() => ({}));
-  type YMD = `${number}-${number}-${number}`;
 
-const map = (j?.days ?? {}) as Partial<Record<YMD, DayBox>>;
-
-// entries를 [YMD, DayBox][] 로 단언해 타입 일치
-for (const [iso, box] of Object.entries(map) as [YMD, DayBox][]) {
-  const c = box.closed ?? {};
-  box.closed = { ...c, special: Boolean((c as any).special || (c as any).col) };
+  const map = (j?.days ?? {}) as Partial<Record<YMD, DayBox>>;
+  for (const [iso, box] of Object.entries(map) as [YMD, DayBox][]) {
+    const c = box.closed ?? {};
+    // special = 개별 특수마감 OR 기본마감에 종속
+    box.closed = { ...c, special: Boolean((c as any).special || (c as any).col || (c as any).basic) };
+  }
+  return map as Record<YMD, DayBox>;
 }
 
-return map as Record<YMD, DayBox>;
-}
-
-async function getDefaults(): Promise<{
-  BASIC: number;
-  SPECIAL: number;
-  examDefaults: Record<string, number>;
-}> {
+async function getDefaults(): Promise<{ BASIC: number; SPECIAL: number; examDefaults: Record<string, number> }> {
   try {
     const r = await fetch("/api/capacity/settings/defaults", { cache: "no-store" });
     const j = await r.json();
@@ -131,12 +123,11 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState<Record<YMD, DayBox>>({});
 
-  // 설정 케파
   const [capBasic, setCapBasic] = useState(0);
   const [capSpecial, setCapSpecial] = useState(0);
   const [capSpecs, setCapSpecs] = useState<Record<string, number>>({});
 
-  // 표시 토글
+  // 표시 토글: 로컬스토리지만 신뢰
   const [showSpecial, setShowSpecial] = useState<boolean>(() => lsGet("ms:cap:showSpecial") === "1");
 
   const [specMenuOpen, setSpecMenuOpen] = useState(false);
@@ -164,7 +155,7 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
       if (need.length > 0) {
         const next = structuredClone(map);
         for (const d of need) {
-          const box = next[d] ?? { cap: 0, used: 0, closed: {} as ClosedMap }; // cap 0으로 둠
+          const box = next[d] ?? { cap: 0, used: 0, closed: {} as ClosedMap };
           next[d] = { ...box, closed: { ...box.closed, basic: true } };
         }
         setDays(next);
@@ -173,15 +164,12 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
       }
 
       setDays(map || {});
-
-      const hasSpecial = Object.values(map || {}).some((b) => b?.closed?.special);
-      if (hasSpecial) setShowSpecial(true);
+      // 자동 ON 강제 금지 (요청사항). 로컬스토리지 값 유지.
     } finally {
       setLoading(false);
     }
   };
 
-  // 초기 로드
   useEffect(() => {
     void reload();
     void (async () => {
@@ -213,7 +201,7 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
 
   const toggle = async (date: YMD, resource: string, nextClose: boolean) => {
     setDays((cur) => {
-      const before = cur[date] ?? { cap: 0, used: 0, closed: {} as ClosedMap }; // cap 0
+      const before = cur[date] ?? { cap: 0, used: 0, closed: {} as ClosedMap };
       const next = structuredClone(cur);
       next[date] = { ...before, closed: { ...before.closed, [resource]: nextClose } };
       return next;
@@ -232,15 +220,14 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
     }
   };
 
-  if (!mounted) {
-    return <div className="h-[70vh] rounded-2xl border border-slate-200 bg-white" />;
-  }
+  if (!mounted) return <div className="h-[70vh] rounded-2xl border border-slate-200 bg-white" />;
 
   return (
     <div className="space-y-4">
       {/* 헤더 */}
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="relative z-10 flex flex-wrap items-center gap-3">
+        {/* 좌측: 네비게이션 묶음(좌상단 고정) */}
+        <div className="inline-flex items-center gap-2">
           <button
             className="h-9 w-9 rounded-full grid place-items-center hover:bg-gray-100 active:bg-gray-200"
             onClick={() => nav(-1)}
@@ -258,7 +245,8 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* 우측: 컨트롤 묶음. 큰 화면에서는 오른쪽 정렬 */}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowSpecial((v) => !v)}
             className={`rounded-full border px-3 py-1.5 text-sm shadow-sm ${
@@ -294,9 +282,7 @@ export default function Calendar({ initialMonth }: { initialMonth: string }) {
                           className="accent-sky-600"
                           checked={selectedSpecs.includes(opt.id)}
                           onChange={() =>
-                            setSelectedSpecs((cur) =>
-                              cur.includes(opt.id) ? cur.filter((x) => x !== opt.id) : [...cur, opt.id],
-                            )
+                            setSelectedSpecs((cur) => (cur.includes(opt.id) ? cur.filter((x) => x !== opt.id) : [...cur, opt.id]))
                           }
                         />
                         <span className="truncate">{opt.name}</span>
@@ -368,10 +354,7 @@ function CalendarGrid({
 
   const skeleton: (YMD | null)[] = [];
   for (let i = 0; i < firstW; i++) skeleton.push(null);
-  for (let d = 1; d <= lastDate; d++) {
-    const date = new Date(base.getFullYear(), base.getMonth(), d);
-    skeleton.push(ymd(date) as YMD);
-  }
+  for (let d = 1; d <= lastDate; d++) skeleton.push(ymd(new Date(base.getFullYear(), base.getMonth(), d)) as YMD);
   while (skeleton.length % 7 !== 0) skeleton.push(null);
 
   return (
@@ -439,15 +422,11 @@ function DayCell({
   const date = new Date(`${iso}T00:00:00`);
   const wday = date.getDay();
   const today = new Date();
-  const isToday =
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate();
+  const isToday = date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
 
   const closed: ClosedMap = { ...(box?.closed ?? {}) };
   if (wday === 0 && closed.basic == null) closed.basic = true;
 
-  // cap 계산: 0, nullish, 900이상은 설정 케파로 대체
   const pick = (v?: number, fallback = 0) => (v && v > 0 && v < 900 ? v : fallback);
 
   const getCap = (res: string) => {
@@ -457,13 +436,19 @@ function DayCell({
     return pick(byRes, capSpecs[res.replace(/^spec:/, "")] ?? 0);
   };
 
-  const getUsed = (res: string) =>
-    box?.usedBy?.[res] ?? (res === "basic" ? box?.used ?? 0 : 0);
+  const getUsed = (res: string) => box?.usedBy?.[res] ?? (res === "basic" ? box?.used ?? 0 : 0);
 
   const row = (label: string, resource: string) => {
-    const isClosed = !!closed[resource];
+    // 기본 마감이 켜지면 하위 카드도 잠김. 기본 해제 시 자동 해제 표시.
     const isSpec = resource.startsWith("spec:");
-    const disabled = (resource !== "basic" && closed.basic) || isSpec;
+    const isClosed =
+      resource === "basic"
+        ? !!closed.basic
+        : resource === "special"
+        ? !!(closed.special || closed.basic)
+        : !!(closed[resource] || (isSpec ? closed.basic : false));
+
+    const disabled = resource !== "basic" && closed.basic;
 
     const cap = Math.max(0, Number(getCap(resource) || 0));
     const used = Math.max(0, Number(getUsed(resource) || 0));
@@ -486,23 +471,14 @@ function DayCell({
         }`}
       >
         <span className="shrink-0 font-medium text-slate-700">{label}</span>
-
-        <span
-          className={`ml-auto tabular-nums ${
-            isFull ? "text-rose-600 font-semibold" : "text-slate-700"
-          }`}
-          title={isFull ? "수용 인원 도달" : undefined}
-        >
+        <span className={`ml-auto tabular-nums ${isFull ? "text-rose-600 font-semibold" : "text-slate-700"}`} title={isFull ? "수용 인원 도달" : undefined}>
           {used}/{cap}
         </span>
-
         <button
           onClick={onClick}
           disabled={disabled || isFull}
           className={`shrink-0 px-1.5 py-0.5 rounded border text-[10px] ${
-            isClosed
-              ? "bg-rose-50 text-rose-700 border-rose-200"
-              : "bg-white text-slate-600 border-slate-200"
+            isClosed ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-white text-slate-600 border-slate-200"
           } disabled:opacity-50`}
         >
           {actionLabel}
@@ -511,7 +487,7 @@ function DayCell({
     );
   };
 
-  const showSpecialRow = showSpecial || closed.special === true;
+  const showSpecialRow = showSpecial || closed.special === true || closed.basic === true;
 
   return (
     <div
@@ -530,11 +506,13 @@ function DayCell({
         {row("기본", "basic")}
         {showSpecialRow && row("특수검진", "special")}
         {selectedSpecs.map((sid) => row(sid, `spec:${sid}`))}
-
         {closed.basic && <div className="text-[11px] text-slate-500">기본이 마감되어 하위 항목도 잠깁니다.</div>}
       </div>
     </div>
   );
 }
+
+
+
 
 

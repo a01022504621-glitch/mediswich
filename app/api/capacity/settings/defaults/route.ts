@@ -13,7 +13,7 @@ type Settings = {
   examDefaults: Record<string, number>;
 };
 
-// 새 행 보장. 기본치는 CapacityDefault에서만 읽음. 없으면 0.
+/** CapacitySetting 행 보장. 초기값은 CapacityDefault를 반영 */
 async function ensureRow(hospitalId: string) {
   const row = await prisma.capacitySetting.findUnique({ where: { hospitalId } });
   if (row) return row;
@@ -41,14 +41,35 @@ export async function GET(req: NextRequest) {
   if (!hid) return NextResponse.json({ ok: false, error: "HOSPITAL_SCOPE_REQUIRED" }, { status: 400 });
 
   const row = await ensureRow(hid);
+
+  // CapacityDefault와 동기화 보정(최초 한 번)
+  const cd = await prisma.capacityDefault.findUnique({ where: { hospitalId: hid } });
+  const syncedDefaults = {
+    BASIC: Number((row.defaults as any)?.BASIC ?? cd?.basicCap ?? 0),
+    NHIS: Number((row.defaults as any)?.NHIS ?? cd?.nhisCap ?? 0),
+    SPECIAL: Number((row.defaults as any)?.SPECIAL ?? cd?.specialCap ?? 0),
+  };
+
+  if (
+    syncedDefaults.BASIC !== (row as any).defaults?.BASIC ||
+    syncedDefaults.NHIS !== (row as any).defaults?.NHIS ||
+    syncedDefaults.SPECIAL !== (row as any).defaults?.SPECIAL
+  ) {
+    await prisma.capacitySetting.update({
+      where: { hospitalId: hid },
+      data: { defaults: syncedDefaults as any },
+    });
+  }
+
   const labels = (row.specials as any)?.labels as string[] | undefined;
   const items = (row.specials as any)?.items as { id: string; name: string }[] | undefined;
 
   const res: Settings = {
     specials: labels ?? (items?.map((x) => x.name) ?? []),
-    defaults: (row.defaults as any) ?? { BASIC: 0, NHIS: 0, SPECIAL: 0 },
-    examDefaults: (row.examDefaults as any) ?? {},
+    defaults: syncedDefaults,
+    examDefaults: ((row.examDefaults as any) ?? {}) as Record<string, number>,
   };
+
   return NextResponse.json(res, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -59,6 +80,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => ({} as any));
   const row = await ensureRow(hid);
 
+  // defaults
   const nextDefaults = { ...(row.defaults as any) };
   if (body?.defaults) {
     const BASIC = Number(body.defaults.BASIC);
@@ -68,9 +90,17 @@ export async function PUT(req: NextRequest) {
       nextDefaults.BASIC = BASIC;
       nextDefaults.NHIS = NHIS;
       nextDefaults.SPECIAL = SPECIAL;
+
+      // CapacityDefault에 동기 저장
+      await prisma.capacityDefault.upsert({
+        where: { hospitalId: hid },
+        create: { hospitalId: hid, basicCap: BASIC, nhisCap: NHIS, specialCap: SPECIAL },
+        update: { basicCap: BASIC, nhisCap: NHIS, specialCap: SPECIAL },
+      });
     }
   }
 
+  // examDefaults
   const nextExam = { ...(row.examDefaults as any) };
   if (body?.examDefaults && typeof body.examDefaults === "object") {
     for (const [k, v] of Object.entries(body.examDefaults)) {
@@ -79,6 +109,7 @@ export async function PUT(req: NextRequest) {
     }
   }
 
+  // specials(labels)
   const nextSpecials = { ...(row.specials as any) };
   if (Array.isArray(body?.specials)) {
     nextSpecials.labels = body.specials.map((x: any) => String(x)).filter(Boolean);
